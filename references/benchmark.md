@@ -4,11 +4,17 @@ A broad check of reckon against measured agent work and against other ways
 of estimating. It is the reason for the changes in 0.2.0 and 0.3.0. Only
 aggregate numbers are published; the task text is private.
 
+Read the limits before quoting anything: one team's history on one
+harness, mostly small requests, a design iterated on the same test set,
+and a pre-registered accuracy criterion (median error under 50%) that
+neither 0.2.0 (51%) nor 0.3.0 (56%) met.
+
 ## Contents
 
 - Setup
 - Headline results
 - 0.3.0: the rescaled gut guess as the default
+- 0.3.1: changes made after the benchmark
 - Where the error comes from
 - What helped and what did not
 - Waits, human touches, splitting
@@ -22,13 +28,16 @@ aggregate numbers are published; the task text is private.
   three product repos and an assistant workspace.
   - The unit is one request: one message to the agent, plus all the agent's
     work until the next message.
-  - Session copies made by resuming or forking were removed. This removed
-    1,133 duplicate requests.
+  - Session copies made by resuming or forking were removed.
   - Also removed:
-    - requests under 3 rounds (1,133);
+    - requests under 3 rounds;
     - turns that only relay a teammate's result (218);
     - requests the agent handed to another agent (128).
-  - That left 567 requests.
+  - That left about 570 requests. (Earlier versions of this file gave 567
+    here and 570 elsewhere, and the same count, 1,133, for both the
+    duplicates and the under-3-round requests. These counts come from the
+    data preparation, not from the scoring output, and could not be
+    re-checked, so the exact figures are left out.)
 - **Split by time:**
   - History: 160 requests sampled from 4-18 November, used for
     calibration.
@@ -84,7 +93,7 @@ Against the fixed criteria, reckon 0.2.0 with calibration:
 |---|---|---|
 | <= P90 in 80-95% | 86.5% | yes |
 | <= P50 in 40-65% | 48% | yes |
-| MdAPE under 50% (CI upper bound under 60%) | 51% (CI upper bound 60%) | no, by a hair |
+| MdAPE under 50% (CI upper bound under 60%) | 51% (CI upper bound 60%) | no |
 | Better than naive, developer hours, and the history median | p < 0.002 for all three | yes |
 | Spearman of at least 0.4 | 0.58 | yes |
 | Cost of at most 5% of the work | 4% batched; about 25% for one small request run on its own | only for larger requests (see below) |
@@ -131,13 +140,19 @@ run on the same 360 requests:
 | 0.2.0, cold start | 178% | 0.37 | 87% | 98% | 0.61 |
 | **0.3.0, cold start** | **67% [54-74]** | **0.78** | **64%** | **97%** | 0.61 |
 
-- **Calibrated accuracy is the same.** 0.3.0 against 0.2.0 gave p = 0.86,
-  with each winning about half the requests. Against the naive rescaled
-  guess, p = 0.67.
+- **The MdAPE criterion is missed again.** 0.3.0 calibrated scored 56%
+  [46-64] against the pre-registered "under 50%". Coverage (88% at or
+  below P90, 50% at or below P50) and rank correlation (0.61) are inside
+  their criteria. "Always the median of the last 40" scores 69%, so the
+  method buys about 13 points of median error over a constant.
+- **Calibrated accuracy is not distinguishable from 0.2.0.** 0.3.0
+  against 0.2.0 gave p = 0.86, with each winning about half the requests.
+  Against the naive rescaled guess, p = 0.67. The point estimate is 5
+  points worse than 0.2.0 (56% against 51%).
 - **Combining rounds with the guess added nothing here.** The full-mode
   requests were small: median 6 minutes and at most 22.
 - **Cold start is much better.** The error was 67% instead of 178%, with
-  97% of actuals at or below P90.
+  97% of actuals at or below P90 (96.5% before rounding).
   - With the skill loaded, agents guessed about 8x their measured time.
     Sonnet and Haiku guessed alike: the history median ratio was 0.12 for
     both.
@@ -160,6 +175,30 @@ run on the same 360 requests:
   - Requests under 1 minute: 61 / 67 / 50%.
 - **Cost:** see below. A single estimate is about half the time and
   tokens of 0.2.0.
+
+## 0.3.1: changes made after the benchmark
+
+0.3.1 fixes the script and the instructions; the benchmark was **not**
+re-run, and every number in this file is from 0.3.0 or earlier. Changes
+that could move the numbers if it were re-run:
+
+- **Window per method.** The 40-item window is now taken per method
+  (items with a guess; items with estimated rounds), and the same-model
+  rule is applied inside that window. 0.3.0 filtered by model first, over
+  all finished items, then took 40. On a history where every item has a
+  guess and one model dominates, as here, the two give nearly the same
+  items, but not always exactly the same.
+- **Measured speed counts as calibrated rounds** when choosing between
+  rounds and guess. Whether that state occurred in the benchmark runs
+  cannot be told from the scoring output.
+- **Risk multipliers are now notes.** The round counts scored here
+  included multipliers on 32% of modules (0.2.0 text). New full-mode round
+  counts will be lower; the history ratio absorbs a consistent shift once
+  calibrated, and at cold start the reported number comes from the guess.
+- **A P90 that is not above the P50** now falls back to the cold spread.
+  This needs identical ratios and should not occur on real history.
+- **Per-request actuals.** The benchmark already scored single requests;
+  the script's `actual` now measures the same unit.
 
 ## Where the error comes from
 
@@ -210,9 +249,10 @@ Ablations of 0.1.0 on 60 test requests (cold start, same estimator):
 | without the risk list | 36 | 235% | 0.74 |
 | without the repo profile | 41 | 310% | 0.78 |
 
-The repo profile helped a little. The whole-task reference class and
-liberal risk multipliers inflated counts. 0.2.0 adds a single-request
-reference class and requires evidence before applying a risk.
+The repo profile's effect (293% against 310% on 60 requests) is within
+noise. The whole-task reference class and liberal risk multipliers
+inflated counts. 0.2.0 added a single-request reference class and required
+evidence before applying a risk; 0.3.1 turns the multipliers into notes.
 
 **Learning curve (0.2.0, most recent k items):**
 
@@ -294,14 +334,23 @@ Calibration pays off after 8 finished tasks.
   - The minute numbers come from one team on Claude Code.
   - Other teams and agents should calibrate on their own history; the
     learning curve says 8 tasks is enough to start.
+  - The cold-start ratios (0.12 and 0.6) are that team's, with two Claude
+    models. They are provisional for everyone else.
 - **Small requests:**
   - Most requests are small, with a median of 1.6 agent minutes.
-  - Large multi-hour work is rare here and is not well tested.
-- **The test set informed 0.2.0:** the window and model rules were chosen
-  after seeing the drift.
-  - The history-only check above points the same way.
-  - A prospective check on requests made after the 0.2.0 freeze is the
-    clean confirmation; publish it when it lands.
+  - No request took more than 60 minutes, and the requests that got full
+    mode took 22 minutes at most. Full mode, the 2-hour split rule and
+    anything multi-hour are untested.
+- **The design was iterated on the same test set:**
+  - The window and model rules of 0.2.0 were chosen after seeing the
+    drift in it, and 0.3.0's quick-mode default after seeing that the
+    rescaled naive guess tied 0.2.0 on it. Only the cold-start ratios were
+    fitted on the history set alone.
+  - The history-only check above points the same way, but the results
+    here are optimistic to an unknown degree.
+  - A prospective check on requests made after a freeze has not been run.
+- **0.1.0's first validation did not replicate:** its 31% cold-start error
+  on 20 whole tasks (evidence.md) became 296% on these 200 requests.
 - **Baselines:** the planning and naive baselines were run as prompts with
   the same batch format. The eta baseline used its own script at the
   matching commit.
@@ -310,9 +359,10 @@ Calibration pays off after 8 finished tasks.
 
 1. Record estimates and actuals with the skill for a few weeks. Quick mode
    records `guess_min`; full mode records both rounds and the guess.
-2. Run `python3 scripts/reckon.py backtest .reckon/history.jsonl`.
+2. Run `python3 <skill-dir>/scripts/reckon.py backtest .reckon/history.jsonl`.
    - The check is leave-one-out.
-   - It uses the same window and model rules as live use.
+   - It uses the same window and model rules as live use (0.3.1 rules;
+     see calibration.md).
    - It reports quick mode (guess) and full mode (rounds) side by side, so
      you can see which works better on your history.
 3. Pass when:

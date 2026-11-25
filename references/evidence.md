@@ -1,15 +1,19 @@
 # Evidence
 
 Why the skill works the way it does. Numbers are as reported by each
-source; check the source before quoting them elsewhere.
+source; check the source before quoting them elsewhere. The external
+figures below were not re-checked against their sources when 0.3.1 was
+prepared, and one (AgentTime) has no link: treat it as secondhand.
 
 ## Agents overestimate agent-built work
 
-- **AgentTime** (MATS study, October 2026, 222 tasks; figures reported
-  secondhand): frontier agents forecast too high in 63-83% of tasks, with a
+- **AgentTime** (described as a MATS study, October 2026, 222 tasks).
+  **Secondhand: no primary source could be linked or checked.** As
+  reported, frontier agents forecast too high in 63-83% of tasks, with a
   typical error of 2.6-3.8x, often guessing about 15 minutes for work that
-  took a few. The cause is anchoring on human timelines from training
-  data.
+  took a few, attributed to anchoring on human timelines from training
+  data. reckon does not depend on these figures; its own benchmark
+  measured the overestimate directly (about 7x for a plain answer).
 - **Why Claude Code time estimates are poor** (Towards Data Science): the
   same anchoring explanation, from practice.
   https://towardsdatascience.com/why-claude-code-time-estimates-are-poor/
@@ -74,7 +78,9 @@ measured agent time of each task.
 - First set (25 tasks, used to tune the anchors): the original anchors
   overcounted rounds about 3x; the plain "how long?" answer was 6.3x too
   high at the median.
-- Second set (20 different tasks, anchors frozen): cold-start median error
+- Second set (20 different tasks, anchors frozen; this result did **not**
+  hold on the larger benchmark, where the same version's cold-start error
+  was 296%): cold-start median error
   31% with 100% of actuals at or below P90; calibrated leave-one-out median
   error 30% with 85% at or below P90 and 50% at or below P50 (cold start:
   55% at or below P50); the plain
@@ -83,6 +89,7 @@ measured agent time of each task.
   happened. Human touch time was not validated, because those tasks were
   handed over by a coordinating agent.
 
-The broader benchmark behind 0.2.0 (200 test requests split by time, eight
-comparison methods, ablations, repeatability, cost, and public SWE-bench
-tasks) is in [benchmark.md](benchmark.md).
+The broader benchmark behind 0.2.0 and 0.3.0 (200 test requests split by
+time, eight comparison methods, ablations, repeatability, cost, and public
+SWE-bench tasks) is in [benchmark.md](benchmark.md). It replaces this
+first validation.

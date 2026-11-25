@@ -1,15 +1,15 @@
 # Anchors
 
-These anchors are for cold starts. Once your history has measured actuals,
-calibration replaces the speed numbers and corrects your round counts
-(see calibration.md).
+These anchors are for full mode (the round count and the breakdown). Once
+your history has measured actuals, calibration replaces the speed numbers
+and corrects your round counts (see calibration.md).
 
 ## Contents
 
 - What counts as a round
 - Task types
 - Size anchors in rounds
-- Risk list (pick at most one per module)
+- Risk notes
 - Human touch minutes
 - Splitting rules
 
@@ -32,7 +32,7 @@ tasks, estimates made with module-by-module padding were about 3x too high.
 Pick the class that matches what you are sizing, and use it as a sanity
 check after decomposing. Measured on Claude Code agents:
 
-| Percentile | One request (570 requests) | Whole piece of work, several requests (86 sessions) |
+| Percentile | One request (about 570 requests) | Whole piece of work, several requests (86 sessions) |
 |---|---|---|
 | 25th | about 5 | about 25 |
 | median | about 9 | about 40 |
@@ -96,28 +96,30 @@ When to make a module and when to add an extra: a module changes
 something (code, config, data, a document). Running, checking, deploying
 and reporting are extras on the module they finish.
 
-## Risk list (pick at most one per module)
+## Risk notes
 
-Most modules have no risk. Apply one only when the request, the profile
-or the code you read names it; a hunch is not evidence. In the benchmark,
-agents put a risk on 6 tasks in 10, and dropping the list made estimates
-better. Expect about 1 module in 4 to carry one.
+Risks are notes for the report. They do **not** change the rounds or the
+minutes: in the benchmark, agents put a risk multiplier on 6 tasks in 10,
+and dropping the multipliers made estimates better. The spread between
+P50 and P90 already comes from measured history.
 
-Multiply the module's rounds (including its extras) by the single largest
-factor that applies. Never multiply two factors together. If more than two
-apply, the module is too vague: ask a question or split it instead. Record
-module rounds before risk; the task total is after risk and integration.
+Note a risk only when the request, the profile or the code you read names
+it; a hunch is not evidence. Most modules have none. Write the code next
+to the module, name the biggest one as "Top risk" with a way to check it
+early, and let it guide the split (put the risky module first, behind its
+own checkpoint). If more than two apply to one module, the module is too
+vague: ask a question or split it.
 
-| Code | Risk | Factor |
+| Code | Risk | What to do about it |
 |---|---|---|
-| R1 | Unfamiliar area: no docs or profile notes cover the code being changed (a missing estimation history alone is not R1) | x1.3 |
-| R2 | External API, SDK or third-party behaviour you cannot read the source of | x1.5 |
-| R3 | Concurrency, timing, flaky or slow tests | x1.5 |
-| R4 | Migration of existing data, or an operation that is hard to undo | x1.5 |
-| R5 | An environment the agent cannot drive itself (physical device, native GUI without automation, hardware, production access it lacks); a test server or browser the agent can reach is not R5 | x2 (and add B touches) |
-| R6 | Vague or conflicting requirements | x1.5 (prefer asking first) |
-| R7 | Contract change across repos or services | x1.3 |
-| R8 | Very large legacy or generated file in the change (over ~1,500 lines) | x1.3 |
+| R1 | Unfamiliar area: no docs or profile notes cover the code being changed (a missing estimation history alone is not R1) | read at Standard level before sizing |
+| R2 | External API, SDK or third-party behaviour you cannot read the source of | try one real call first, as its own checkpoint |
+| R3 | Concurrency, timing, flaky or slow tests | say which tests; a re-run may be a wait (C) |
+| R4 | Migration of existing data, or an operation that is hard to undo | plan a dry run and a human approval (B) |
+| R5 | An environment the agent cannot drive itself (physical device, native GUI without automation, hardware, production access it lacks); a test server or browser the agent can reach is not R5 | add the person's manual steps to B |
+| R6 | Vague or conflicting requirements | ask first; otherwise confidence is LOW |
+| R7 | Contract change across repos or services | list every side that must change as its own module |
+| R8 | Very large legacy or generated file in the change (over ~1,500 lines) | note it; reading it costs rounds you should already have counted |
 
 After all modules: add 15% of the summed rounds for integration when there
 are two or more modules.
@@ -142,10 +144,12 @@ measured numbers.
 
 ## Splitting rules
 
-- Any module over 45 rounds after risk: split it into modules that each
-  end in a commit, a passing test run or another checkpoint.
+- Any module over 45 rounds: split it into modules that each end in a
+  commit, a passing test run or another checkpoint.
 - Any task with A+C P90 over 2 hours: propose a split into tasks that can
   be estimated, run and checked on their own. Until the split is agreed,
   report the unsplit total and list the proposed pieces with their rounds.
 - Agent success rates fall as tasks get longer (see evidence.md), so a long
   unsplit task is not just slower; it is more likely to need a redo.
+- The 2-hour threshold is a working rule: the benchmark had no work that
+  long, so it is untested (benchmark.md).

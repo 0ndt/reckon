@@ -15,7 +15,7 @@ from a few hundred lines instead of re-reading the repo.
 
 | Section | Content | Source |
 |---|---|---|
-| header | `<!-- reckon-commit: <full HEAD hash> -->` and the date | `git rev-parse HEAD` |
+| header | `<!-- reckon-commit: <full HEAD hash> -->`, the date and the branch name | `git rev-parse HEAD` |
 | Size | file count, test file count, commits in 90 days, main file types, top-level folders with file counts | `git ls-files`, `git log` |
 | Build and test | manifests, CI config, build/test/lint commands | package.json scripts, Makefile targets, CI files |
 | Knowledge sources | docs, code indexes and CLIs found (see sources.md) | file checks, PATH |
@@ -47,11 +47,17 @@ folder tree two levels deep and skip the hot-files section.
 
 1. Read the commit in the header.
 2. If it equals HEAD, use the profile as is.
-3. Otherwise run `git diff --stat <commit>..HEAD`. If fewer than about 30
-   files changed and no manifest or CI file changed, update only the
-   affected lines and Notes entries, then write the new commit hash.
-4. If a manifest or CI file changed, or the diff is large, rebuild the
-   mechanical sections and keep Notes, checking each note against the diff.
+3. Otherwise run `git diff --name-only <commit>..HEAD`. If fewer than 30
+   files changed and no manifest or CI file changed, the profile is
+   current enough: use it as is and leave the header alone. A profile is a
+   summary, not a snapshot, and worktrees that share one store would
+   otherwise rewrite each other's stamp after every commit.
+4. If 30 or more files changed, or a manifest or CI file changed, rebuild
+   the mechanical sections and keep Notes, checking each note against the
+   diff.
+
+`python3 <skill-dir>/scripts/reckon.py profile` applies this rule;
+`--force` rebuilds regardless.
 
 ## Token budget
 
@@ -59,7 +65,7 @@ folder tree two levels deep and skip the hot-files section.
 |---|---|
 | first build (commands + reading docs + writing Notes) | 5-15k tokens, once |
 | reading a current profile | 1-2k tokens |
-| incremental refresh | 1-3k tokens |
+| refresh after a large change | 1-3k tokens |
 
 If the first build would cost more than the work being estimated, skip it,
 estimate at the Light level from the task text alone, and say so in the

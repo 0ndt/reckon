@@ -1,7 +1,7 @@
 # Wait times
 
 Copy this table into `.reckon/profile.md` under Notes (or a `waits` section)
-and fill it from real measurements. `scripts/reckon.py calibrate --type T`
+and fill it from real measurements. `<skill-dir>/scripts/reckon.py calibrate --type T`
 prints a measured wait floor once history has three or more items of that
 type. Until then, use the defaults.
 
@@ -21,8 +21,8 @@ Count a wait in C only when the task requires that step and it is known
 to take over 2 minutes; quick builds and test runs are already in A. A
 wait the task might need ("deploy if the tests pass") is not counted; list
 it as an assumption. Agents tend to overestimate C, so once history exists
-apply the `c_ratio` from `reckon.py calibrate`.
+report the `c_corrected` that `record --c-min` prints (C x `c_ratio`).
 
 How to measure: the Claude Code adapter counts any shell command that runs
-longer than 2 minutes as wait time, so `reckon.py actual` fills `wait_min`
-automatically. By hand, time the command or read the CI run's duration.
+longer than 2 minutes as wait time, so `actual` fills `wait_min`
+automatically. A command started in the background is not counted. By hand, time the command or read the CI run's duration.
