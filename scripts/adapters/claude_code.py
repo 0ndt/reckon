@@ -19,6 +19,21 @@ Definitions (see references/calibration.md):
   human_gap_min time between the end of a turn and the next human prompt
   wall_min     first event to last event
   model        the model that wrote most of the agent's responses
+
+Known limits of these definitions:
+  subagents    a subagent's own records (sidechain) are skipped, so its rounds
+               are not counted. The main agent's time blocked on a subagent
+               call is a silent gap: it counts as agent_min up to
+               IDLE_THRESHOLD_S per gap and as idle_min (dropped) above it.
+  background   a shell command started in the background returns at once, so
+               it is never a wait. Time spent polling it counts as agent_min;
+               a single silent gap over IDLE_THRESHOLD_S counts as idle_min.
+
+Measuring one request instead of the whole session: measure(path, since=T)
+measures the turn in which T falls, from T on. If the agent called no tool
+between T and the end of that turn (it only reported the estimate and
+stopped), the request is the next turn instead (the go-ahead). `turns=N`
+adds the N turns that follow.
 """
 
 import glob
@@ -55,6 +70,8 @@ def list_sessions(project_filter=None):
     keep = []
     for p in paths:
         folder = os.path.basename(os.path.dirname(p))
+        # The folder name is a lossy encoding of the cwd; callers still
+        # compare the transcript's real cwd by path component.
         if folder == enc or folder.startswith(enc + "-"):
             keep.append(p)
     return keep
@@ -113,26 +130,57 @@ def _is_human(rec):
     return True
 
 
-def measure(path):
-    """Measure one transcript. Returns a dict or None if it holds no human prompt."""
+def _window(humans, round_ts, since, turns):
+    """Pick the part of a session that belongs to one request.
+
+    Returns (t_from, t_to, starts_at_prompt, first_is_request)."""
+    inf = float("inf")
+    before = [k for k, h in enumerate(humans) if h <= since]
+    if not before:
+        # The estimate was made before this session began: its first turn.
+        k, t_from, at_prompt, first = 0, humans[0], True, True
+    else:
+        k = before[-1]
+        end = humans[k + 1] if k + 1 < len(humans) else inf
+        worked = any(since < t < end for t in round_ts)
+        if worked or k + 1 >= len(humans):
+            t_from, at_prompt, first = since, False, False
+        else:
+            # Nothing but the estimate itself in that turn: the work is the
+            # next turn, and its prompt (the go-ahead) is a human turn.
+            k += 1
+            t_from, at_prompt, first = humans[k], True, False
+    last = k + max(0, turns)
+    t_to = humans[last + 1] if last + 1 < len(humans) else inf
+    return t_from, t_to, at_prompt, first
+
+
+def measure(path, since=None, turns=0):
+    """Measure one transcript, or one request in it when `since` is given.
+
+    `since` is a Unix time (when the estimate was recorded); see the module
+    docstring for which turns are then measured. Returns a dict, or None when
+    the transcript holds no human prompt or nothing after `since`."""
     events = []          # (ts, kind) for main-chain user/assistant records
     humans = []          # timestamps of human prompts
     first_prompt = None
-    rounds = set()
+    round_ts = {}        # round id -> timestamp
+    model_ts = []        # (ts, model) per assistant record
     tool_start = {}      # tool_use_id -> (ts, name)
-    waits = []          # (start, end) of long shell/monitor tool calls
+    waits = []           # (start, end) of long shell/monitor tool calls
     title = None
     prs = []
     cost = None
     session_id = os.path.splitext(os.path.basename(path))[0]
     cwd = branch = None
-    models = {}
 
     with open(path, encoding="utf-8", errors="replace") as fh:
         for line in fh:
             try:
                 rec = json.loads(line)
             except ValueError:
+                continue
+            if not isinstance(rec, dict):
                 continue
             kind = rec.get("type")
             if kind == "ai-title":
@@ -154,11 +202,11 @@ def measure(path):
             msg = rec.get("message") or {}
             if kind == "assistant":
                 if msg.get("model") and not msg["model"].startswith("<"):
-                    models[msg["model"]] = models.get(msg["model"], 0) + 1
+                    model_ts.append((ts, msg["model"]))
                 content = msg.get("content") or []
                 for block in content if isinstance(content, list) else []:
                     if isinstance(block, dict) and block.get("type") == "tool_use":
-                        rounds.add(msg.get("id") or rec.get("requestId") or rec.get("uuid"))
+                        round_ts.setdefault(msg.get("id") or rec.get("requestId") or rec.get("uuid"), ts)
                         tool_start[block.get("id")] = (ts, block.get("name"))
                 events.append((ts, "agent"))
             else:
@@ -180,10 +228,21 @@ def measure(path):
     if not humans:
         return None
     events.sort()
+    humans.sort()
+    if since is None:
+        scope = "session"
+        t_from, t_to, at_prompt, first_is_request = events[0][0], float("inf"), True, True
+    else:
+        scope = "request"
+        t_from, t_to, at_prompt, first_is_request = _window(humans, list(round_ts.values()), since, turns)
+    inside = [(ts, who) for ts, who in events if t_from <= ts < t_to and (at_prompt or ts > t_from)]
+    if not inside:
+        return None
+
     agent_s = wait_s = idle_s = gap_s = 0.0
-    in_turn = False
-    prev = None
-    for ts, who in events:
+    in_turn = not at_prompt
+    prev = None if at_prompt else t_from
+    for ts, who in inside:
         if who == "human":
             if in_turn and prev is not None:
                 gap_s += max(0.0, ts - prev)
@@ -202,24 +261,35 @@ def measure(path):
             agent_s += rest
         prev = ts
 
+    prompts_inside = sum(1 for h in humans if t_from <= h < t_to)
+    models = {}
+    for ts, name in model_ts:
+        if t_from <= ts < t_to:
+            models[name] = models.get(name, 0) + 1
+    if not models:
+        for _ts_, name in model_ts:
+            models[name] = models.get(name, 0) + 1
     if not title and first_prompt:
         title = first_prompt.splitlines()[0][:80]
     result = {
         "session_id": session_id,
         "source": NAME,
+        "scope": scope,
         "title": title or session_id,
-        "start": datetime.fromtimestamp(events[0][0]).isoformat(timespec="minutes"),
+        "start": datetime.fromtimestamp(t_from).isoformat(timespec="minutes"),
         "cwd": cwd,
         "branch": branch,
         "model": max(models, key=models.get) if models else None,
         "prs": prs,
-        "rounds": len(rounds),
+        "rounds": sum(1 for t in round_ts.values() if t_from <= t < t_to and (at_prompt or t > t_from)),
         "agent_min": round(agent_s / 60, 1),
         "wait_min": round(wait_s / 60, 1),
         "idle_min": round(idle_s / 60, 1),
-        "human_turns": max(0, len(humans) - 1),
+        "human_turns": max(0, prompts_inside - (1 if first_is_request else 0)),
         "human_gap_min": round(gap_s / 60, 1),
-        "wall_min": round((events[-1][0] - events[0][0]) / 60, 1),
+        "wall_min": round((inside[-1][0] - t_from) / 60, 1),
+        "prompts": len(humans),                       # human prompts in the whole session
+        "other_prompts": len(humans) - prompts_inside,  # ... outside the measured part
     }
     if cost:
         result["cost_usd"] = round(cost.get("totalCostUSD") or 0, 2)
