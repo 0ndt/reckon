@@ -91,9 +91,10 @@ comes out over 2 hours.
 4. **If P90 is over 2 hours**, switch to full mode for this task.
 5. **Record the actual** as the last tool call of the turn that did the
    work: `python3 <skill-dir>/scripts/reckon.py actual <id>`. It measures
-   only this request: from the estimate to the next human prompt. If
-   later prompts continued the same request, run it again with
-   `--turns N`. If the work ran in another session, pick it with
+   only this request: from the estimate to the next human prompt (or,
+   if you stopped after reporting the estimate, the go-ahead turn that
+   followed). If later prompts continued the same request, run it again
+   with `--turns N`. If the work ran in another session, pick it with
    `sessions`, then `actual <id> --session <id-prefix>`. Not on Claude
    Code: `actual <id> --agent-min <minutes>`. Never invent an actual.
 
