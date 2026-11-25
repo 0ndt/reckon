@@ -4,7 +4,7 @@ description: Estimates how long software work will take when an AI coding agent 
 license: MIT
 compatibility: Any agent that can read and write files. Python 3.9+ (standard library only) is optional; without it every step runs by hand. Automatic session measurement currently supports Claude Code transcripts.
 metadata:
-  version: "0.3.1"
+  version: "0.3.2"
 ---
 
 # reckon
@@ -86,7 +86,7 @@ comes out over 2 hours.
      --confidence LOW`: your guess is about your own speed.
    - If a wait is certain, add `--c-min <minutes>`; report `c_corrected`
      when the script prints it.
-3. **Report** only the rescaled range, in one or two lines: "About 2-12
+3. **Report** only the rescaled range, in one or two lines: "About 2-9
    minutes of agent time (P50-P90, cold start, low confidence)." or
    "... (calibrated on 23 past tasks)". Add "Needs about 5 minutes of your
    review" or a wait only when the task cannot finish without it.
@@ -110,14 +110,16 @@ by hand:
   [references/calibration.md](references/calibration.md) ("The window").
   With 8 or more items in the window: `A_p50 = N x median(g)`,
   `A_p90 = N x 90th percentile of g`.
-- Otherwise use the cold values: `A_p50 = N x 0.12`, `A_p90 = N x 0.6`,
-  confidence LOW. They are provisional: fitted on one team's history with
-  two Claude models, and replaced by your own history after 8 items.
+- Otherwise use the cold values: `A_p50 = N x 0.09`, `A_p90 = N x 0.45`,
+  confidence LOW. They are provisional, from one team's history: the guess
+  level moved by up to 1.7x between skill versions, models and days, so a
+  cold P50 can be off by that much. Your own history replaces them after
+  8 items.
 - Append one line to `.reckon/history.jsonl` (`ts` is the UTC time of the
   estimate):
 
 ```json
-{"id": "2026-03-02-fix-login-loop", "date": "2026-03-02", "ts": "2026-03-02T09:15:00Z", "title": "Fix login loop", "type": "bugfix", "level": "quick", "estimate": {"guess_min": 20, "a_p50": 2.4, "a_p90": 12.0, "method": "guess cold", "confidence": "LOW"}}
+{"id": "2026-03-02-fix-login-loop", "date": "2026-03-02", "ts": "2026-03-02T09:15:00Z", "title": "Fix login loop", "type": "bugfix", "level": "quick", "estimate": {"guess_min": 20, "a_p50": 1.8, "a_p90": 9.0, "method": "guess cold", "confidence": "LOW"}}
 ```
 
 - After the work, add the actual to that same line, before its last `}`,

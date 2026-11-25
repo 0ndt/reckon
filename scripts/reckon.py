@@ -45,10 +45,12 @@ MIN_SPEED_ITEMS = 10
 RECENT_WINDOW = 40      # per method: the most recent finished items that method can use
 MIN_MODEL_ITEMS = 8     # use only same-model items once the window holds this many
 # Quick mode: the agent's gut guess of its own minutes, rescaled by history.
-# Cold prior fitted on the benchmark history only (not the test set): with
-# this skill loaded, agents guessed about 8x their measured minutes.
-COLD_GUESS_R50 = 0.12
-COLD_GUESS_R90 = 0.6
+# Cold prior: provisional. History-only fits ranged from 0.07 to 0.13 across
+# two models, two skill texts and two sessions, and the later test set wanted
+# about 25% less than the history fit in every run (benchmark.md, 0.3.2).
+# With this skill loaded, agents guessed about 11x their measured minutes.
+COLD_GUESS_R50 = 0.09
+COLD_GUESS_R90 = 0.45
 COLD_GUESS_SPREAD = COLD_GUESS_R90 / COLD_GUESS_R50
 
 TYPES = ("bugfix", "feature", "refactor", "migration", "ui", "integration", "infra", "docs", "research", "ops")

@@ -9,7 +9,7 @@ About <A_p50>-<A_p90> of agent time (P50-P90, <calibrated on n past tasks | cold
 <Only if needed:> Needs about <B> of your time (<what>), and a wait of about <C> (<what>).
 ```
 
-Examples: "About 2-12 minutes of agent time (P50-P90, cold start, low
+Examples: "About 2-9 minutes of agent time (P50-P90, cold start, low
 confidence)." and "About 4-8 minutes of agent time (P50-P90, calibrated on
 12 past tasks). Needs your review of the diff, about 5 minutes."
 
@@ -33,7 +33,7 @@ Method: <guess cold | guess calibrated (n=<n>) | rounds speed | rounds calibrate
 
 | Bucket | P50 | P90 | Basis |
 |--------|-----|-----|-------|
-| A. Agent time | <a_p50> | <a_p90> | <method>: <the inputs, e.g. gut guess rescaled x0.12 / x0.6> |
+| A. Agent time | <a_p50> | <a_p90> | <method>: <the inputs, e.g. gut guess rescaled x0.09 / x0.45> |
 | B. Human touch | <B> | | <each touch and its minutes> |
 | C. Wait | <C> | | <each wait and its minutes; after c_ratio when printed> |
 | **Agent-side elapsed (A+C)** | **<sum>** | **<sum>** | |
@@ -85,8 +85,8 @@ A multi-part spec that asks for a breakdown: full mode.
    The risks are notes: the rounds stay as counted.
 4. The number, from the script on an empty history:
    `calibrate --type feature --rounds 81 --guess 240` prints
-   `a_p50 28.8, a_p90 144.0, used "guess cold"`. At cold start the
-   rescaled guess is the estimate (240 x 0.12 and 240 x 0.6). The
+   `a_p50 21.6, a_p90 108.0, used "guess cold"`. At cold start the
+   rescaled guess is the estimate (240 x 0.09 and 240 x 0.45). The
    rounds-only figure, `calibrate --rounds 81`, is 16.2 / 48.6: shown as a
    cross-check, not reported as the estimate.
 5. B: review the plan (10), review the API and the digest diffs (2 x 15,
@@ -103,7 +103,7 @@ A multi-part spec that asks for a breakdown: full mode.
 8. Record, then report:
    `record --title "Notification preferences and email digest" --type
    feature --rounds 81 --guess-min 240 --b-min 50 --c-min 30 --modules
-   '[...]'` stores method `guess cold`, 28.8 / 144.0, confidence LOW.
+   '[...]'` stores method `guess cold`, 21.6 / 108.0, confidence LOW.
 
    "About 1 hour, up to about 3 hours, plus about 50 minutes of your
    time. Confidence is low: there is no history yet, so the range is wide.

@@ -11,7 +11,7 @@
       "expectations": [
         "The answer gives agent time as two numbers, a P50 and a P90, in minutes",
         "history.jsonl has exactly one new line; it has estimate.guess_min, a ts, and estimate.method \"guess cold\"",
-        "In that line a_p50 equals guess_min x 0.12 and a_p90 equals guess_min x 0.6 (to one decimal), and the answer reports those two numbers, rounded",
+        "In that line a_p50 equals guess_min x 0.09 and a_p90 equals guess_min x 0.45 (to one decimal), and the answer reports those two numbers, rounded",
         "The answer does not show the raw gut guess (the guess_min value) as an estimate, and does not say the guess was halved, discounted or otherwise adjusted by the agent",
         "The answer states low confidence or cold start",
         "The answer contains no module table and no round count",
@@ -27,7 +27,7 @@
       "files": ["evals/fixtures/store/history.jsonl"],
       "expectations": [
         "history.jsonl has one new line with estimate.method \"guess calibrated\" and estimate.confidence \"MEDIUM\"",
-        "In that line a_p50 equals guess_min x 0.21 and a_p90 equals guess_min x 0.40 (to one decimal); it does not equal guess_min x 0.12 and guess_min x 0.6",
+        "In that line a_p50 equals guess_min x 0.21 and a_p90 equals guess_min x 0.40 (to one decimal); it does not equal guess_min x 0.09 and guess_min x 0.45",
         "The answer reports that P50-P90 range and says it is calibrated on past tasks (12), not cold start or low confidence",
         "The answer does not show the raw gut guess as an estimate",
         "The 13 existing lines of history.jsonl are unchanged"
@@ -71,7 +71,7 @@
         "The stored a_p90 is above 120 minutes (the premise of this eval; if it is not, the run is void rather than passed)",
         "The answer contains a module table with rounds per module and a total",
         "The answer proposes a split into at least two pieces and names a checkpoint for each",
-        "The reported agent-time range equals the stored a_p50 and a_p90 (rounded): at cold start that is guess_min x 0.12 and x 0.6, not rounds x 0.2",
+        "The reported agent-time range equals the stored a_p50 and a_p90 (rounded): at cold start that is guess_min x 0.09 and x 0.45, not rounds x 0.2",
         "Risks, if any are listed, appear as notes; the rounds in the table are not multiplied by a risk factor",
         "The answer does not present the breakdown as making the estimate more accurate",
         "Agent time is not given in days"
@@ -98,14 +98,14 @@
       "id": 7,
       "name": "no Python",
       "prompt": "Python is not installed on this machine. How long would it take you to add a dark mode toggle to the settings page?",
-      "expected_output": "Quick mode by hand: gut guess, cold-start factors 0.12 and 0.6, a one- or two-line answer with low confidence, and one hand-written line appended to .reckon/history.jsonl.",
+      "expected_output": "Quick mode by hand: gut guess, cold-start factors 0.09 and 0.45, a one- or two-line answer with low confidence, and one hand-written line appended to .reckon/history.jsonl.",
       "files": [],
       "expectations": [
         "The agent gives an estimate; it does not stop or ask for Python to be installed",
         "No Python interpreter was run",
         "The answer gives agent time as a P50 and a P90 in minutes and states low confidence or cold start",
         "history.jsonl has one new line that is valid JSON on a single line, with id, ts, type, estimate.guess_min, estimate.a_p50 and estimate.a_p90",
-        "In that line a_p50 equals guess_min x 0.12 and a_p90 equals guess_min x 0.6",
+        "In that line a_p50 equals guess_min x 0.09 and a_p90 equals guess_min x 0.45",
         "The answer contains no module table"
       ]
     },

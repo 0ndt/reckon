@@ -80,9 +80,9 @@ Method: guess cold · Confidence: LOW · Split proposed: 3 pieces · Top risk: p
    median and 90th percentile of actual/guess over the 40 most recent
    finished tasks that have a guess, done by the same model once 8 of
    those are. Agent guesses are consistently several times too high, so a
-   measured ratio fixes most of the error. Cold start uses 0.12 and 0.6,
-   fitted on the benchmark history: a provisional prior from one team and
-   two Claude models, replaced by your own history after 8 tasks. A
+   measured ratio fixes most of the error. Cold start uses 0.09 and 0.45:
+   a provisional prior from one team and two Claude models that can be
+   off by up to 1.7x, replaced by your own history after 8 tasks. A
    backlog is the same thing N times: one guess per item, recorded in one
    `record --batch` call.
 2. **Full mode when structure matters:** a quick P90 over 2 hours; a
@@ -142,8 +142,16 @@ the outcome) and scored against measured agent time (bucket A).
 | Naive guess rescaled on recent history | 53% | 1.18 | 45% | 88% |
 | reckon 0.2.0 (rounds), cold start | 178% | 0.37 | 87% | 98% |
 | reckon 0.2.0 (rounds), calibrated | 51% | 1.06 | 48% | 87% |
-| **reckon 0.3.0 (quick), cold start** | **67%** | **0.78** | **64%** | **97%** |
-| **reckon 0.3.0 (quick), calibrated** | **56%** | **1.04** | **50%** | **88%** |
+| reckon 0.3.0 (quick), cold start (prior 0.12) | 67% | 0.78 | 64% | 97% |
+| reckon 0.3.0 (quick), calibrated | 56% | 1.04 | 50% | 88% |
+| **reckon 0.3.2 (quick), cold start, Sonnet** | **66%** | **0.83** | **65%** | **97%** |
+| **reckon 0.3.2 (quick), cold start, Haiku** | **86%** | **0.67** | **69%** | **96%** |
+| **reckon 0.3.2 (quick), calibrated** | **51%** | **1.11** | **48%** | **88%** |
+
+The 0.3.2 rows use guesses made with the 0.3.1/0.3.2 skill text (the
+text is the same; 0.3.2 only changes the cold prior). Calibrated results
+across repeated guess runs ranged from 51% to 55%, so 0.3.2 is not
+better than 0.3.0 once calibrated (p = 0.53); it is the same.
 
 Cost of one estimate:
 
@@ -151,12 +159,14 @@ Cost of one estimate:
 |---|---|---|
 | 0.2.0 | 2,900 tokens | 27 s, 200k tokens |
 | 0.3.0 | 2,000 tokens (Haiku: 2,100 tokens at 1/15 the price) | 13 s, 115k tokens |
+| 0.3.2 | 1,800 tokens (Haiku: 2,000 tokens) | not re-measured |
 
 What this means:
 
 - **The accuracy criterion set in advance was missed.** The target was a
-  median error under 50%. 0.2.0 scored 51% and 0.3.0 scored 56% (95%
-  interval 46-64%). The coverage criteria were met.
+  median error under 50%. 0.2.0 scored 51%, 0.3.0 56% (95% interval
+  46-64%) and 0.3.2 51-55% across guess runs. The coverage criteria
+  were met.
 - **After 8 finished tasks:** calibrated estimates are almost unbiased, and
   P50/P90 mean what they say.
 - **Single requests:** expect an error of about half the actual, either
@@ -164,7 +174,11 @@ What this means:
   recent median" scores 69%, so the method buys about 13 points.
 - **0.3.0 vs 0.2.0:** not distinguishable once calibrated (p = 0.86),
   though the point estimate is 5 points worse. The cold start is far
-  better (67% vs 178%), and an estimate costs about half.
+  better (66-86% vs 178%), and an estimate costs about half.
+- **Cold start is fragile.** The same 0.3.0 text guessed 19% higher in
+  the afternoon than in the morning, and the 0.3.1 text made Haiku guess
+  1.6x higher. Treat a cold estimate as a rough range until 8 tasks are
+  recorded.
 - **Cost against the 5% target:** batched, an estimate is under 0.5% of
   the work's tokens. One quick estimate run on its own in a fresh session
   cost a median 13% of the work's time and 15% of its tokens, because the
@@ -185,8 +199,9 @@ requests was 296%.
 over three weeks, with one harness. Most requests were small (median 1.6
 agent minutes, none over 60), so full mode, the 2-hour split rule and
 multi-hour work are untested. The design was iterated on the same test
-set, so the numbers are optimistic to an unknown degree. The benchmark
-was not re-run for 0.3.1. See "Limits of this benchmark" in
+set, so the numbers are optimistic to an unknown degree; the 0.3.2 cold
+prior was also chosen after seeing test results. See "Limits of this
+benchmark" in
 [references/benchmark.md](references/benchmark.md).
 
 Your models, tools and repos differ. Record actuals for a few tasks and run
@@ -259,7 +274,7 @@ the folder this README is in:
 ```
 python3 <skill-dir>/scripts/reckon.py where                 # create/print the store
 python3 <skill-dir>/scripts/reckon.py record --title "Fix login loop" --type bugfix --guess-min 20 --model <id>
-        # quick; on an empty history prints a_p50 2.4, a_p90 12.0, method "guess cold"
+        # quick; on an empty history prints a_p50 1.8, a_p90 9.0, method "guess cold"
 python3 <skill-dir>/scripts/reckon.py record --batch backlog.jsonl --model <id>   # one estimate per line
 python3 <skill-dir>/scripts/reckon.py actual <id>                         # measure the request that followed the estimate
 python3 <skill-dir>/scripts/reckon.py actual <id> --turns 2               # ... plus two follow-up turns
@@ -269,7 +284,7 @@ python3 <skill-dir>/scripts/reckon.py actual <id> --session <id-prefix> --whole-
 python3 <skill-dir>/scripts/reckon.py actual <id> --agent-min 9 --wait-min 6   # or by hand
 python3 <skill-dir>/scripts/reckon.py profile               # full mode: build or refresh the profile
 python3 <skill-dir>/scripts/reckon.py calibrate --type feature --rounds 81 --guess 240
-        # on an empty history prints a_p50 28.8, a_p90 144.0, used "guess cold"
+        # on an empty history prints a_p50 21.6, a_p90 108.0, used "guess cold"
 python3 <skill-dir>/scripts/reckon.py record --title "Notification preferences" --type feature --rounds 81 --guess-min 240 --b-min 50 --c-min 30
 python3 <skill-dir>/scripts/reckon.py backfill --limit 200   # seed measured speed from past sessions (5+ rounds each)
 python3 <skill-dir>/scripts/reckon.py backtest file.jsonl    # leave-one-out check
@@ -293,11 +308,22 @@ them, AgentTime, is secondhand with no primary source linked.
 
 ## License
 
-MIT. Version 0.3.1.
+MIT. Version 0.3.2.
 
 ## Changelog
 
-**0.3.1** (fixes from two reviews; the benchmark was not re-run)
+**0.3.2** (benchmark re-run on the 0.3.1 text)
+
+- Cold prior 0.09 / 0.45 instead of 0.12 / 0.6. 0.12 was already about
+  25% high for 0.3.0, and the 0.3.1 text made guesses higher still. At
+  0.09 / 0.45 every guess run kept 91-98% of actuals at or below P90.
+- Calibrated accuracy is unchanged (51-55% across guess runs).
+- Upgrading: a change to the skill text can move the guess level (Haiku
+  moved 1.6x between 0.3.0 and 0.3.1). Ratios in an existing history were
+  measured with the older text, so expect estimates to be off by up to
+  that factor until the 40-item window has turned over.
+
+**0.3.1** (fixes from two reviews)
 
 - `actual` measures the one request an estimate was for (from the time
   `record` stored to the next human prompt; `--turns N` for follow-ups),

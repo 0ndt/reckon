@@ -65,13 +65,19 @@ A_p50 = N x g50        g50 = median of g
 A_p90 = N x g90        g90 = 90th percentile of g
 ```
 
-With fewer, use the cold values `g50 = 0.12` and `g90 = 0.6`, confidence
-LOW. They were fitted on the benchmark history only: with this skill
-loaded, agents guessed about 8x their measured minutes, and Claude Sonnet
-and Claude Haiku guessed alike. On the later test set they gave a 67%
-median error with 97% of actuals at or below P90 (benchmark.md). They are
-provisional: one team's numbers on one harness. Your own history replaces
-them after 8 finished items.
+With fewer, use the cold values `g50 = 0.09` and `g90 = 0.45`, confidence
+LOW. With this skill loaded, agents guessed about 11x their measured
+minutes. The values are provisional, from one team's history on one
+harness:
+- History-only fits ranged from 0.07 to 0.13 across two models, two skill
+  texts and two sessions, and the later test set wanted about 25% less
+  than the history fit every time; 0.09 is a rounded value across those
+  runs, chosen after seeing test results (benchmark.md, "0.3.1 re-run").
+- With the 0.3.1 text, Claude Sonnet gave a 66% median error and Claude
+  Haiku 86% (estimates still about 1.5x too high), with 96-97% of actuals
+  at or below P90.
+- Expect a cold P50 to be off by up to 1.7x. Your own history replaces
+  these values after 8 finished items.
 
 The method only works if the guess is made the same way every time: the
 agent's plain answer for its own minutes, without reading code and without
@@ -110,7 +116,7 @@ Use the first state that applies to the rounds windows:
 Full mode records both the rounds and the gut guess. "Calibrated" for
 rounds means the ratio or the speed state above; for the guess it means 8
 items in the guess window. The benchmark's cold rescaled guess beat cold
-rounds by a wide margin (67% against 178% median error), so at cold start
+rounds by a wide margin (66-86% against 178% median error), so at cold start
 the guess is the estimate and the rounds are shown as a cross-check only.
 
 | Rounds         | Guess      | Reported A                |
@@ -137,8 +143,8 @@ the largest value.
 
 If the 90th percentile is not above the median (few items, or all with
 the same ratio), there is no usable range. Keep the P50, set the P90 to
-the P50 times the cold-start spread (x5 for the guess, which is 0.6 /
-0.12; x3 for rounds), and report confidence LOW, saying the history is
+the P50 times the cold-start spread (x5 for the guess, which is 0.45 /
+0.09; x3 for rounds), and report confidence LOW, saying the history is
 too uniform to give a range. The script does this and prints a `note`.
 
 ## B and C
@@ -185,12 +191,12 @@ lines were written by the script (`record` then `actual`), a quick-mode
 item at cold start and a full-mode item not yet finished:
 
 ```json
-{"id": "2026-11-25-stop-duplicate-email-on-retry", "date": "2026-11-25", "ts": "2026-11-25T08:06:19Z", "title": "Stop duplicate email on retry", "type": "bugfix", "repo": "shop-api", "agent": "example-agent", "level": "quick", "estimate": {"rounds": null, "guess_min": 20, "a_p50": 2.4, "a_p90": 12.0, "b_min": 0, "c_min": 0, "method": "guess cold", "confidence": "LOW", "modules": [], "model": "example-model-1"}, "actual": {"agent_min": 3.5, "rounds": 14, "wait_min": 0, "idle_min": 0, "human_turns": 0, "wall_min": null, "source": "manual", "model": "example-model-1"}}
-{"id": "2026-11-25-notification-preferences-and-email-diges", "date": "2026-11-25", "ts": "2026-11-25T08:06:19Z", "title": "Notification preferences and email digest", "type": "feature", "repo": "shop-api", "agent": "example-agent", "level": "full", "estimate": {"rounds": 81, "guess_min": 240, "a_p50": 28.8, "a_p90": 144.0, "b_min": 50, "c_min": 30, "method": "guess cold", "confidence": "LOW", "modules": [{"name": "preferences table and API", "type": "migration", "size": "M", "rounds": 26, "risk": "R4"}, {"name": "daily digest job", "type": "integration", "size": "M", "rounds": 30, "risk": "R2"}, {"name": "settings screen", "type": "ui", "size": "S", "rounds": 14}], "model": "example-model-1"}}
+{"id": "2026-11-25-stop-duplicate-email-on-retry", "date": "2026-11-25", "ts": "2026-11-25T08:06:19Z", "title": "Stop duplicate email on retry", "type": "bugfix", "repo": "shop-api", "agent": "example-agent", "level": "quick", "estimate": {"rounds": null, "guess_min": 20, "a_p50": 1.8, "a_p90": 9.0, "b_min": 0, "c_min": 0, "method": "guess cold", "confidence": "LOW", "modules": [], "model": "example-model-1"}, "actual": {"agent_min": 3.5, "rounds": 14, "wait_min": 0, "idle_min": 0, "human_turns": 0, "wall_min": null, "source": "manual", "model": "example-model-1"}}
+{"id": "2026-11-25-notification-preferences-and-email-diges", "date": "2026-11-25", "ts": "2026-11-25T08:06:19Z", "title": "Notification preferences and email digest", "type": "feature", "repo": "shop-api", "agent": "example-agent", "level": "full", "estimate": {"rounds": 81, "guess_min": 240, "a_p50": 21.6, "a_p90": 108.0, "b_min": 50, "c_min": 30, "method": "guess cold", "confidence": "LOW", "modules": [{"name": "preferences table and API", "type": "migration", "size": "M", "rounds": 26, "risk": "R4"}, {"name": "daily digest job", "type": "integration", "size": "M", "rounds": 30, "risk": "R2"}, {"name": "settings screen", "type": "ui", "size": "S", "rounds": 14}], "model": "example-model-1"}}
 ```
 
-Check: 20 x 0.12 = 2.4 and 20 x 0.6 = 12; 240 x 0.12 = 28.8 and 240 x 0.6
-= 144 (the guess row of the table above; 81 rounds cold would be 16.2 and
+Check: 20 x 0.09 = 1.8 and 20 x 0.45 = 9; 240 x 0.09 = 21.6 and
+240 x 0.45 = 108 (the guess row of the table above; 81 rounds cold would be 16.2 and
 48.6).
 
 An actual measured from a transcript looks like this:

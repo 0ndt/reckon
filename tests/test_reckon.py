@@ -284,7 +284,7 @@ class Precedence(Case):
 
     def test_cold_start_the_guess_drives_the_number(self):
         out = self.used([], "--rounds", 48, "--guess", 90)
-        self.assertEqual((out["used"], out["a_p50"], out["a_p90"]), ("guess cold", 10.8, 54.0))
+        self.assertEqual((out["used"], out["a_p50"], out["a_p90"]), ("guess cold", 8.1, 40.5))
 
     def test_cold_start_rounds_alone(self):
         out = self.used([], "--rounds", 48)
@@ -294,7 +294,7 @@ class Precedence(Case):
         out = self.used(self.SPEED, "--rounds", 40, "--guess", 30)
         self.assertEqual(out["method"], "speed")
         self.assertEqual(out["used"], "rounds speed")
-        self.assertNotEqual(out["a_p50"], 3.6)       # 30 x 0.12, what 0.3.0 printed
+        self.assertNotEqual(out["a_p50"], 2.7)       # 30 x 0.09, the cold guess
 
     def test_measured_speed_and_calibrated_guess_are_combined(self):
         out = self.used(self.SPEED + self.GUESSES, "--rounds", 40, "--guess", 30)
@@ -319,7 +319,7 @@ class Precedence(Case):
         mod = load_module()
         cal = {"cold": {"method": "cold"},
                "speed or ratio": {"method": "speed", "mpr50": 0.2, "mpr90": 0.4}}
-        gcal = {"cold": {"method": "cold", "g50": 0.12, "g90": 0.6},
+        gcal = {"cold": {"method": "cold", "g50": 0.09, "g90": 0.45},
                 "calibrated": {"method": "calibrated", "g50": 0.2, "g90": 0.5}}
         for r_state, g_state, used in rows:
             rounds = None if r_state == "none" else 40
@@ -583,7 +583,7 @@ class Validation(Case):
             fh.write('{"title": "Update badges", "type": "docs", "guess_min": 5}\n')
         proc = self.run_cli("record", "--batch", batch, "--model", "model-a")
         outs = [json.loads(line) for line in proc.stdout.splitlines()]
-        self.assertEqual([(o["a_p50"], o["a_p90"]) for o in outs], [(2.4, 12.0), (5.4, 27.0), (0.6, 3.0)])
+        self.assertEqual([(o["a_p50"], o["a_p90"]) for o in outs], [(1.8, 9.0), (4.0, 20.2), (0.4, 2.2)])
         self.assertEqual(len(self.read_items()), 3)
         with open(batch, "a", encoding="utf-8") as fh:
             fh.write('{"title": "Bad", "type": "docs", "guess_min": -1}\n')

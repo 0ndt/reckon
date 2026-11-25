@@ -7,7 +7,8 @@ aggregate numbers are published; the task text is private.
 Read the limits before quoting anything: one team's history on one
 harness, mostly small requests, a design iterated on the same test set,
 and a pre-registered accuracy criterion (median error under 50%) that
-neither 0.2.0 (51%) nor 0.3.0 (56%) met.
+neither 0.2.0 (51%), 0.3.0 (56%) nor 0.3.2 (51-55% across guess runs)
+met.
 
 ## Contents
 
@@ -15,6 +16,7 @@ neither 0.2.0 (51%) nor 0.3.0 (56%) met.
 - Headline results
 - 0.3.0: the rescaled gut guess as the default
 - 0.3.1: changes made after the benchmark
+- 0.3.1 re-run and the 0.3.2 cold prior
 - Where the error comes from
 - What helped and what did not
 - Waits, human touches, splitting
@@ -127,7 +129,7 @@ run on the same 360 requests:
 - For the 12.5% of test requests where the estimator chose full mode, the
   rounds came from the 0.2.0 run, which uses the same counting text.
 - The cold-start ratios (0.12 and 0.6) were fitted on the history set
-  only.
+  only. 0.3.2 replaced them with 0.09 and 0.45; see "0.3.1 re-run".
 
 | Method (test set, 200 requests) | MdAPE [95% CI] | actual / P50 | <= P50 | <= P90 | Spearman |
 |---|---|---|---|---|---|
@@ -154,9 +156,10 @@ run on the same 360 requests:
 - **Cold start is much better.** The error was 67% instead of 178%, with
   97% of actuals at or below P90 (96.5% before rounding).
   - With the skill loaded, agents guessed about 8x their measured time.
-    Sonnet and Haiku guessed alike: the history median ratio was 0.12 for
-    both.
-  - This prior is still one team's number.
+    With the 0.3.0 text, Sonnet and Haiku guessed alike: the history
+    median ratio was 0.12 for both. That did not hold for the 0.3.1 text.
+  - The same text re-run the same afternoon scored 77%, not 67%: the
+    cold figure moves with the session (see "0.3.1 re-run").
 - **Learning curve:**
 
   | Finished items | MdAPE | <= P90 |
@@ -167,7 +170,8 @@ run on the same 360 requests:
 
 - **Repeatability:** across three Sonnet runs on 40 requests, the guess
   varied by 13% (median coefficient of variation). Rounds varied by
-  15-18%.
+  15-18%. This is variation within one session; the level of a full run
+  moved 19% between a morning and an afternoon run of the same text.
 - **By group (0.3.0 / 0.2.0 / naive rescaled):**
   - Repo work: 50 / 45 / 46%.
   - Outside a repo: 57 / 60 / 55%.
@@ -178,9 +182,8 @@ run on the same 360 requests:
 
 ## 0.3.1: changes made after the benchmark
 
-0.3.1 fixes the script and the instructions; the benchmark was **not**
-re-run, and every number in this file is from 0.3.0 or earlier. Changes
-that could move the numbers if it were re-run:
+0.3.1 fixes the script and the instructions. The changes below could
+move the numbers; the measured result is in the next section.
 
 - **Window per method.** The 40-item window is now taken per method
   (items with a guess; items with estimated rounds), and the same-model
@@ -199,6 +202,66 @@ that could move the numbers if it were re-run:
   This needs identical ratios and should not occur on real history.
 - **Per-request actuals.** The benchmark already scored single requests;
   the script's `actual` now measures the same unit.
+
+## 0.3.1 re-run and the 0.3.2 cold prior
+
+All 360 requests were guessed again with the 0.3.1 text (Sonnet and
+Haiku), and scored with the 0.3.1 script. As a control, the frozen 0.3.0
+text was guessed again the same afternoon. 0.3.2 has the 0.3.1 text; it
+only changes the cold prior.
+
+**Calibrated (test set, rolling, Sonnet):**
+
+| Guess run | MdAPE [95% CI] | actual / P50 | <= P50 | <= P90 |
+|---|---|---|---|---|
+| 0.3.0 text, morning (the 0.3.0 result) | 56% [46-64] | 1.04 | 50% | 88% |
+| 0.3.0 guesses (morning), 0.3.1 script | 54% [45-61] | 1.06 | 50% | 88.5% |
+| 0.3.1 text | 51% [40-62] | 1.11 | 48% | 88% |
+| 0.3.1 text with the 0.3.0 guess sentence | 55% [46-64] | 1.13 | 47.5% | 87% |
+| 0.3.0 text, afternoon | 53% [46-61] | 1.10 | 48.5% | 87.5% |
+
+0.3.1 against 0.3.0: p = 0.53. The spread between guess runs is about
++-2-3 points, so no improvement is claimed. Haiku: 58-59% in every run.
+
+**Cold start.** The guess level moved, and the cold error with it:
+
+| Guess run | Guess level vs 0.3.0 morning | Cold MdAPE at 0.12 / 0.6 | at 0.09 / 0.45 | <= P90 at 0.09 / 0.45 | actual / P50 at 0.09 / 0.45 |
+|---|---|---|---|---|---|
+| Sonnet, 0.3.0, morning | - | 67% | 53% | 94.5% | 1.04 |
+| Sonnet, 0.3.0, afternoon | x1.19 | 77% | 56% | 97.5% | 0.88 |
+| Sonnet, 0.3.1 | x1.26 | 81% | 66% | 97% | 0.83 |
+| Sonnet, 0.3.1 + old guess sentence | x1.31 | 93% | 71% | 97% | 0.78 |
+| Haiku, 0.3.0, morning | - | 67% | 56% | 93% | 1.09 |
+| Haiku, 0.3.0, afternoon | x1.02 | 68% | 58% | 91.5% | 1.05 |
+| Haiku, 0.3.1 | x1.66 | 142% | 86% | 95.5% | 0.67 |
+| Haiku, 0.3.1 + old guess sentence | x1.64 | 132% | 82% | 96% | 0.66 |
+
+- **Sonnet:** most of the shift (x1.19 of x1.26) appeared with the
+  unchanged 0.3.0 text, so it is session-to-session drift (time of day,
+  backend or CLI state), not the text. The text's own share was x1.07-1.11.
+- **Haiku:** the shift is real and caused by the 0.3.1 text. It is spread
+  over the Quick mode section and the intro and hard rules; restoring the
+  0.3.0 guess sentence changed nothing. Rank order did not change
+  (Spearman 0.55-0.64 in every run), which is why calibrated results are
+  unaffected.
+- **The prior.** History-only fits ranged from 0.069 to 0.131 across the
+  eight runs, and the test-optimal value was below 0.12 in all eight,
+  including the 0.3.0 morning runs (about 0.09-0.10): the history median
+  is stale by the time the test set starts. 0.12 was already about 25%
+  high for 0.3.0.
+- **0.3.2 uses 0.09 / 0.45.** One rounded value for all models, chosen
+  after seeing the test results. Acceptance, set before scoring all eight
+  runs: at least 90% of actuals at or below P90 in every run (91.5-97.5%)
+  and actual / P50 between 0.65 and 1.1 (0.66-1.09). It does not fix
+  Haiku with the 0.3.1 text: estimates are still about 1.5x too high.
+- **Median error rewards low priors**, because it punishes estimates that
+  are too high more than ones that are too low. That is why the prior was
+  judged on actual / P50 and coverage, not on MdAPE alone.
+- **Upgrades:** a text change moved Haiku's guesses 1.6x. Ratios already
+  in a history were measured with the older text and carry over
+  imperfectly until the window turns over.
+- **Not yet measured:** session-to-session variation with several runs on
+  different days, which is the missing number in all of the above.
 
 ## Where the error comes from
 
@@ -275,7 +338,9 @@ Calibration pays off after 8 finished tasks.
   - Claude Haiku 5.5: 54-58%
   - Claude Sonnet 5.5: 53-64%
   - Claude Opus 5.5: 46-58%
-- The model used to estimate matters little, so the cheapest one is fine.
+- The model used to estimate matters little once calibrated, so the
+  cheapest one is fine then. At cold start it matters: with the 0.3.1 text
+  Haiku scored 86% against Sonnet's 66%.
 
 **By group (0.2.0, rolling):**
 - Work in a git repo: 45% MdAPE. Assistant operations outside a repo: 60%.
@@ -334,8 +399,9 @@ Calibration pays off after 8 finished tasks.
   - The minute numbers come from one team on Claude Code.
   - Other teams and agents should calibrate on their own history; the
     learning curve says 8 tasks is enough to start.
-  - The cold-start ratios (0.12 and 0.6) are that team's, with two Claude
-    models. They are provisional for everyone else.
+  - The cold-start ratios (0.09 and 0.45 since 0.3.2) are that team's,
+    with two Claude models, and moved with the skill text and the
+    session. They are provisional for everyone else.
 - **Small requests:**
   - Most requests are small, with a median of 1.6 agent minutes.
   - No request took more than 60 minutes, and the requests that got full
@@ -344,8 +410,9 @@ Calibration pays off after 8 finished tasks.
 - **The design was iterated on the same test set:**
   - The window and model rules of 0.2.0 were chosen after seeing the
     drift in it, and 0.3.0's quick-mode default after seeing that the
-    rescaled naive guess tied 0.2.0 on it. Only the cold-start ratios were
-    fitted on the history set alone.
+    rescaled naive guess tied 0.2.0 on it. The 0.3.0 cold-start ratios
+    were fitted on the history set alone; the 0.3.2 ones were chosen after
+    seeing test results.
   - The history-only check above points the same way, but the results
     here are optimistic to an unknown degree.
   - A prospective check on requests made after a freeze has not been run.
