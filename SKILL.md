@@ -55,7 +55,7 @@ the folder holding this file.
 | Mode | Use when | Cost |
 |---|---|---|
 | Quick (default) | any single request, and every item of a backlog | one guess, one script call |
-| Full | the quick P90 is over 2 hours; the request is a multi-part plan or spec that needs a breakdown or a split; or someone asks for a breakdown | reading [references/full-mode.md](references/full-mode.md) and the three references it names (about 8k tokens), plus a repo profile |
+| Full | the quick P90 is over 2 hours; the request is a multi-part plan or spec that needs a breakdown or a split; or someone asks for a breakdown | reading [references/full-mode.md](references/full-mode.md) and the three references it names (about 8k tokens), plus a repo profile; up to about 10k when the profile and wait-time steps also need repo-profile.md, sources.md and wait-times-template.md |
 
 Full mode is a structure for explaining and splitting large work. It is
 not a more accurate number: in the benchmark, counting rounds added
@@ -75,8 +75,10 @@ comes out over 2 hours.
    earlier rescaled results in the conversation.
 2. **Rescale and record.**
    `python3 <skill-dir>/scripts/reckon.py record --title "<short title>"
-   --type <type> --guess-min <N> --model <model-id>` prints `a_p50`,
-   `a_p90` and `confidence`, and stores the estimate with its time.
+   --type <type> --guess-min <N> --model <model-id>` prints an `id`,
+   `a_p50`, `a_p90` and `confidence`, and stores the estimate with its
+   time. Keep the `id` for step 5. Do not call other tools after
+   `record` in the same turn unless they are the work itself.
    - Types: bugfix, feature, refactor, migration, ui, integration, infra,
      docs, research, ops.
    - Omit `--model` if you do not know your model id.
@@ -115,7 +117,7 @@ by hand:
   estimate):
 
 ```json
-{"id": "2026-03-02-fix-login-loop", "date": "2026-03-02", "ts": "2026-03-02T09:15:00Z", "title": "Fix login loop", "type": "bugfix", "level": "quick", "estimate": {"guess_min": 20, "a_p50": 2.4, "a_p90": 12, "method": "guess cold", "confidence": "LOW"}}
+{"id": "2026-03-02-fix-login-loop", "date": "2026-03-02", "ts": "2026-03-02T09:15:00Z", "title": "Fix login loop", "type": "bugfix", "level": "quick", "estimate": {"guess_min": 20, "a_p50": 2.4, "a_p90": 12.0, "method": "guess cold", "confidence": "LOW"}}
 ```
 
 - After the work, add the actual to that same line, before its last `}`,

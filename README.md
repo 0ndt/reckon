@@ -271,7 +271,7 @@ python3 <skill-dir>/scripts/reckon.py profile               # full mode: build o
 python3 <skill-dir>/scripts/reckon.py calibrate --type feature --rounds 81 --guess 240
         # on an empty history prints a_p50 28.8, a_p90 144.0, used "guess cold"
 python3 <skill-dir>/scripts/reckon.py record --title "Notification preferences" --type feature --rounds 81 --guess-min 240 --b-min 50 --c-min 30
-python3 <skill-dir>/scripts/reckon.py backfill --limit 200   # seed measured speed from past sessions
+python3 <skill-dir>/scripts/reckon.py backfill --limit 200   # seed measured speed from past sessions (5+ rounds each)
 python3 <skill-dir>/scripts/reckon.py backtest file.jsonl    # leave-one-out check
 ```
 
@@ -302,6 +302,8 @@ MIT. Version 0.3.1.
 - `actual` measures the one request an estimate was for (from the time
   `record` stored to the next human prompt; `--turns N` for follow-ups),
   not the whole session. `--whole-session` is the explicit option.
+  `record` is therefore the last tool call of a turn that only
+  estimates; full mode runs `calibrate`, writes its report, then records.
 - One rule for rounds against guess, in calibration.md, and the script,
   the examples and this README follow it. Measured speed now counts as
   calibrated rounds.

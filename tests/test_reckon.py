@@ -233,6 +233,23 @@ class PerRequestActual(Case):
         self.assertAlmostEqual(out["actual_agent_min"], 3.0, places=1)
         self.assertEqual(self.item("feature")["actual"]["human_turns"], 1)
 
+    def test_full_mode_order_measures_the_work_not_the_report(self):
+        # full-mode.md step 7: calibrate, write the report, then record as the last tool call
+        self.transcript("dddd4444-fullmode", [
+            (T0, [T0 + 5, T0 + 10, T0 + 15], T0 + 30),     # calibrate, write report, record
+            (T0 + 300, [T0 + 300 + 60, T0 + 300 + 120], T0 + 300 + 180),
+            (T0 + 900, [T0 + 900 + 60 * k for k in range(1, 10)], T0 + 1500),
+        ])
+        self.write_history([self.pending("plan", T0 + 16)])
+        out, _ = self.json_cli("actual", "plan", "--session", "dddd4444")
+        self.assertAlmostEqual(out["actual_agent_min"], 3.0, places=1)
+
+    def test_calibrate_and_record_print_the_same_full_mode_numbers(self):
+        args = ["--type", "feature", "--rounds", 81]
+        cal, _ = self.json_cli("calibrate", *args, "--guess", 240)
+        rec, _ = self.json_cli("record", "--title", "Plan", *args, "--guess-min", 240)
+        self.assertEqual((cal["a_p50"], cal["a_p90"]), (rec["a_p50"], rec["a_p90"]))
+
     def test_no_work_after_the_estimate_is_an_error_not_a_wrong_number(self):
         self.three_request_session()
         self.write_history([self.pending("late", T0 + 99999)])
@@ -362,6 +379,12 @@ class DocsMatchTheScript(Case):
                                 if hit.group(1) not in ("<skill-dir>/", "`<skill-dir>/"):
                                     bad.append(f"{name}:{number}: {line.strip()}")
         self.assertEqual(bad, [])
+
+    def test_full_mode_records_last(self):
+        with open(os.path.join(SKILL, "references", "full-mode.md"), encoding="utf-8") as fh:
+            step7 = fh.read().split("## 7.")[1]
+        self.assertLess(step7.index("reckon.py calibrate"), step7.index(".reckon/estimates/"))
+        self.assertLess(step7.index(".reckon/estimates/"), step7.index("reckon.py record"))
 
     def test_version_is_the_same_everywhere(self):
         with open(os.path.join(SKILL, "SKILL.md"), encoding="utf-8") as fh:

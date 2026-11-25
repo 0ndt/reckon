@@ -224,6 +224,10 @@ session:
 - If the agent called no tool between `ts` and the end of that turn (it
   reported the estimate and stopped), the request is the **next** turn:
   the person's go-ahead and the work that follows it.
+- So `record` must be the last tool call of a turn that only estimates.
+  A tool call after it (writing a report file, reading more code) makes
+  that tail the measured request and the work turn is missed. Full mode
+  therefore runs `calibrate`, writes its report, and calls `record` last.
 - `--turns N` also counts the N turns after that, for follow-up prompts
   that belong to the same request (answers, corrections). Run `actual`
   again to replace an earlier measurement.
@@ -252,8 +256,9 @@ Two things these rules count imperfectly:
 - **Background shell commands** return at once, so they are never a wait.
   Time the agent spends polling counts as `agent_min`.
 
-`backfill` adds whole past sessions as measured-only items and keeps the
-file in start-time order.
+`backfill` adds whole past sessions with at least 5 rounds as
+measured-only items (shorter sessions are skipped) and keeps the file in
+start-time order.
 
 ## Recording actuals by hand
 

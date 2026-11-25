@@ -132,16 +132,23 @@ the pieces.
 
 ## 7. Report and record
 
-Record first, so the report shows what was stored:
+`record` must be the **last tool call** of the estimate turn: `actual`
+measures from the moment of `record`, so any tool call after it (such as
+writing the report file) would be counted as the work. In this order:
+
+1. Get the numbers without storing anything:
+   `python3 <skill-dir>/scripts/reckon.py calibrate --type <type> --rounds <R> --guess <N> --model <model-id>`
+   (`record` will store the same `a_p50` / `a_p90`).
+2. Fill in the full-mode template in [output-template.md](output-template.md)
+   and save it as `.reckon/estimates/<date>-<slug>.md`.
+3. Record, and make no further tool call in this turn:
 
 ```
 python3 <skill-dir>/scripts/reckon.py record --title "<title>" --type <type> --rounds <R> --guess-min <N> --b-min <B> --c-min <C> --model <model-id> --modules '<JSON list>'
 ```
 
 (`--rounds` makes it a full-mode item; by hand, use the schema in
-calibration.md.) Then fill in the full-mode template in
-[output-template.md](output-template.md), show it, and save it as
-`.reckon/estimates/<date>-<slug>.md`.
+calibration.md.) Then show the report in your reply.
 
 After the work, record the actual as in SKILL.md, step 5. A full-mode
 task usually spans several turns or sessions: use `--turns N`, or
