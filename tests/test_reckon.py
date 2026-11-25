@@ -186,6 +186,12 @@ class PerRequestActual(Case):
         stamp = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
         self.assertLessEqual(abs(stamp - before), 60)
 
+    def test_record_stores_the_skill_version(self):
+        out, _ = self.json_cli("record", "--title", "Fix typo", "--type", "docs", "--guess-min", 5)
+        with open(os.path.join(SKILL, "SKILL.md"), encoding="utf-8") as fh:
+            version = re.search(r'version: "([^"]+)"', fh.read()).group(1)
+        self.assertEqual(self.item(out["id"])["skill_version"], version)
+
     def test_record_then_actual_end_to_end(self):
         out, _ = self.json_cli("record", "--title", "Fix typo", "--type", "docs", "--guess-min", 5)
         now = int(time.time())

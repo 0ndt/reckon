@@ -359,9 +359,14 @@ them, AgentTime, is secondhand with no primary source linked.
 
 ## License
 
-MIT. Version 0.4.0.
+MIT. Version 0.4.1.
 
 ## Changelog
+
+**0.4.1**
+
+- Each estimate stores `skill_version` (the SKILL.md it was made with), so
+  a later release can tell which ratios were measured with an older text.
 
 **0.4.0**
 

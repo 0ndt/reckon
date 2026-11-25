@@ -209,6 +209,10 @@ An actual measured from a transcript looks like this:
   the request to measure, so include it in lines written by hand.
 - `method: "manual"` marks a range entered with `--a-p50` instead of
   computed.
+- `skill_version` is the `metadata.version` of the SKILL.md the estimate
+  was made with (since 0.4.1). The guess level can move when the skill
+  text changes, so this tells which ratios came from which text. By hand,
+  copy it from SKILL.md; lines without it are older.
 - `scope` is `request` or `session` (see the next section); `start` is in
   local time.
 - Measured-only items (from `backfill`) have `"kind": "measured"` and no

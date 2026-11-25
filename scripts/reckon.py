@@ -243,6 +243,18 @@ def sort_entries(entries):
     return [e for _t, e in keyed]
 
 
+def skill_version():
+    """metadata.version of the SKILL.md next to this script, or None."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "SKILL.md")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            head = fh.read(4000)
+    except OSError:
+        return None
+    m = re.search(r'^\s*version:\s*"?([^"\s]+)"?\s*$', head, re.M)
+    return m.group(1) if m else None
+
+
 def now_ts():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -747,6 +759,10 @@ def build_item(spec, cal, taken, where=""):
     item = {"id": item_id, "date": today, "ts": now_ts(), "title": safe_title(title), "type": task_type,
             "repo": os.path.basename(repo_root() or os.getcwd()), "agent": spec.get("agent") or detect_agent(),
             "level": level, "estimate": estimate}
+    version = skill_version()
+    if version:
+        # the guess level moves with the skill text; keep which text made it
+        item["skill_version"] = version
     shown = {"id": item_id, "a_p50": a_p50, "a_p90": a_p90, "method": method, "confidence": confidence}
     if b_min:
         shown["b_min"] = b_min
