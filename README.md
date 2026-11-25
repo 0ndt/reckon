@@ -2,6 +2,8 @@
 
 **Realistic Estimates, Calibrated on Known Outcomes, Not man-days.**
 
+[![tests](https://github.com/0ndt/reckon/actions/workflows/tests.yml/badge.svg)](https://github.com/0ndt/reckon/actions/workflows/tests.yml)
+
 An [Agent Skill](https://agentskills.io) that sizes software work done by
 AI coding agents the way that work actually behaves: in agent minutes,
 split into agent time, human touch time and wait time, reported as P50/P90
