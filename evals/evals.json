@@ -1,0 +1,67 @@
+{
+  "skill_name": "reckon",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "How long will it take you to add a CSV export button to the orders page? It should export the same columns as the table and respect the current filters. The repo has a React frontend in web/ and a FastAPI backend in api/.",
+      "expected_output": "A quick-mode reckon estimate: one or two lines with agent time as P50-P90 minutes from the rescaled gut guess, the confidence, and human or wait time only if needed. Recorded in history with guess_min.",
+      "files": [],
+      "expectations": [
+        "The answer gives agent time as a P50 and a P90 in minutes, not a single number",
+        "It uses quick mode: no module table or round count",
+        "The answer contains no man-days, man-hours, days or story points as the estimate",
+        "The estimate is recorded in .reckon/history.jsonl with a guess_min",
+        "A confidence level or the calibration basis is stated (LOW / cold start when there is no history)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Our sprint sheet says 'Migrate user avatars from local disk to S3: 3 days'. The agent will do it. Is 3 days right?",
+      "expected_output": "Compares the 3-day figure with an agent-based estimate instead of adopting it; flags data migration risk; includes deploy/wait and human review time.",
+      "files": [],
+      "expectations": [
+        "The answer does not adopt the 3-day figure as the estimate",
+        "It reports a P50/P90 range for agent time in minutes or hours",
+        "It mentions the migration run or deploy as a wait, or the person's review, separately from agent time",
+        "If it uses full mode, it applies at most one risk factor per module (R4 for the data migration) and does not stack factors",
+        "It recommends a split or a dry run if the P90 exceeds 2 hours, or states that no split is needed"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Estimate this backlog for our agent: (1) fix the login redirect loop on Safari, (2) add rate limiting to the public API, (3) rewrite the billing module from Python 2 to Python 3, (4) update the README badges.",
+      "expected_output": "One line per item with type, size, rounds and P50/P90; the billing rewrite is flagged for splitting; the README item is XS.",
+      "files": [],
+      "expectations": [
+        "It uses full mode because the request is a backlog with several parts",
+        "Each of the four items gets its own estimate",
+        "The README badge item is sized XS or S",
+        "The billing rewrite is flagged as too large and split into pieces with checkpoints",
+        "Every estimate uses minutes or hours of agent time, never days",
+        "Risk factors are not multiplied together"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "That export task is done. Record how long it really took.",
+      "expected_output": "Records the actual for the matching estimate in .reckon/history.jsonl, from the agent session if possible or by asking for start/end times; never invents numbers.",
+      "files": [],
+      "expectations": [
+        "The agent looks for the matching estimate in .reckon/history.jsonl",
+        "It measures the actual from the session transcript or asks for times; it does not invent an actual",
+        "It reports the actual next to the estimated P50/P90"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Python is not installed on this machine. How long would it take you to add a dark mode toggle to the settings page?",
+      "expected_output": "Runs the method by hand: profile or Quick read, modules and rounds, cold-start formula 0.2 min/round and x3 for P90, B and C buckets, and appends to history.jsonl manually.",
+      "files": [],
+      "expectations": [
+        "The agent does not stop because Python is missing",
+        "It applies the quick-mode formula by hand (guess x 0.12 for P50 and x 0.6 for P90 at cold start) or a calibrated ratio from history",
+        "It reports agent time as P50/P90 in minutes and names any human or wait time separately"
+      ]
+    }
+  ]
+}
