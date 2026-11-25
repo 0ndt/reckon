@@ -95,6 +95,7 @@ def store_dir(create=True):
     if not path:
         root = repo_root()
         path = os.path.join(root if root else os.path.expanduser("~"), ".reckon")
+    path = os.path.abspath(path)
     if create:
         if not os.path.isdir(path) and path not in _CREATED:
             _CREATED.append(path)
@@ -682,7 +683,7 @@ def _positive(spec, key, where, allow_zero=False):
         and (value >= 0 if allow_zero else value > 0)
     if not ok:
         raise ValueError(f"{where}{key} must be a number {'>= 0' if allow_zero else 'above 0'}, got {value!r}")
-    return value
+    return int(value) if float(value).is_integer() else value
 
 
 def build_item(spec, cal, taken, where=""):
