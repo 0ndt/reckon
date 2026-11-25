@@ -11,21 +11,24 @@ ranges and corrected by what past tasks really took.
 
 *To reckon* means to estimate or work something out ("I reckon it'll take
 an hour"). Sailors used **dead reckoning** to find a ship's position from
-its known speed and the time travelled, with no landmark in sight. This
-skill does the same for agent work: it takes measured speed (minutes per
-round) and the work ahead (rounds) and works out where you will be, then
-corrects its course every time a real outcome comes in.
+a known speed and the time travelled, with no landmark in sight, and
+corrected the course at every fix. This skill does the same for agent
+work: it takes the agent's own first reckoning (its gut guess), corrects
+it by how far off past guesses turned out to be, and corrects again every
+time a real outcome comes in. Since 0.3.0 that rescaled guess is the
+default; counting rounds and converting them with measured speed is kept
+for large work that needs a breakdown.
 
 The letters spell out the method:
 
 | Letter | Stands for | What the skill does |
 |---|---|---|
 | **R** | Realistic | estimates in agent units, not human timelines |
-| **E** | Estimates | always a P50/P90 range with a confidence level |
+| **E** | Estimates | agent time is always a P50/P90 range with a confidence level |
 | **C** | Calibrated | scales by the ratio of actual to estimated time on past tasks |
-| **K** | Known | uses only measured history and the repo's own docs and indexes |
+| **K** | Known | uses measured history once there is some; before 8 finished tasks it has no known outcomes of yours and falls back to a provisional prior from one team's benchmark, marked LOW |
 | **O** | Outcomes | records what each task really took, automatically when it can |
-| **N** | Not man-days | never answers in man-days, man-hours or story points |
+| **N** | Not man-days | never answers in man-days, man-hours or story points; work that people will do is out of scope |
 
 ## The problem
 
@@ -42,26 +45,31 @@ test, and builds, CI and deploys still take their time.
 Quick mode, the default for a single request:
 
 ```
-About 2-6 minutes of agent time (P50-P90, calibrated on 40 past tasks).
+About 4-8 minutes of agent time (P50-P90, calibrated on 12 past tasks).
 Needs your review of the diff, about 5 minutes.
 ```
 
-Full mode, for plans, backlogs and work that may need splitting:
+Full mode, for a multi-part plan or anything whose quick P90 is over 2
+hours. It adds a breakdown someone can check and a proposed split; it
+does not make the number more accurate. This is the script's real output
+on an empty history (`--rounds 81 --guess-min 240`), where the rescaled
+guess gives the number and the rounds are a cross-check:
 
 ```
-| # | Module                        | Type    | Size | Rounds | Risk | After risk |
-|---|-------------------------------|---------|------|--------|------|------------|
-| 1 | CSV endpoint with filters     | feature | M    | 30     | -    | 30         |
-| 2 | Export button and download    | ui      | S    | 12     | -    | 12         |
-|   | Integration (+15%)            |         |      |        |      | 6          |
+| # | Module                        | Type        | Size | Rounds | Risk note |
+|---|-------------------------------|-------------|------|--------|-----------|
+| 1 | Preferences table and API     | migration   | M    | 26     | R4        |
+| 2 | Daily digest job              | integration | M    | 30     | R2        |
+| 3 | Settings screen               | ui          | S    | 14     | -         |
+|   | Integration (+15%)            |             |      | 11     |           |
 
-| Bucket            | P50    | P90    |
-|-------------------|--------|--------|
-| A. Agent time     | 10 min | 29 min |
-| B. Human touch    | 25 min |        |
-| C. Wait           | 8 min  |        |
-| A+C elapsed       | 18 min | 37 min |
-Confidence: LOW (cold start) · Top risk: large exports time out
+| Bucket            | P50    | P90     |
+|-------------------|--------|---------|
+| A. Agent time     | 29 min | 2h 24m  |
+| B. Human touch    | 50 min |         |
+| C. Wait           | 30 min |         |
+| A+C elapsed       | 59 min | 2h 54m  |
+Method: guess cold · Confidence: LOW · Split proposed: 3 pieces · Top risk: provider batching limits
 ```
 
 ## How it works
@@ -70,33 +78,48 @@ Confidence: LOW (cold start) · Top risk: large exports time out
    many minutes of my own time will this take?" It does not read code and
    does not correct the number itself. The script multiplies it by the
    median and 90th percentile of actual/guess over the 40 most recent
-   finished tasks, done by the same model once there are 8. Agent guesses
-   are consistently several times too high, so a measured ratio fixes most
-   of the error. Cold start uses 0.12 and 0.6, fitted on the benchmark
-   history.
-2. **Full mode when structure matters:** a plan, spec, sprint or backlog
-   with several parts; a quick P90 over 2 hours; or a request for a
-   breakdown.
+   finished tasks that have a guess, done by the same model once 8 of
+   those are. Agent guesses are consistently several times too high, so a
+   measured ratio fixes most of the error. Cold start uses 0.12 and 0.6,
+   fitted on the benchmark history: a provisional prior from one team and
+   two Claude models, replaced by your own history after 8 tasks. A
+   backlog is the same thing N times: one guess per item, recorded in one
+   `record --batch` call.
+2. **Full mode when structure matters:** a quick P90 over 2 hours; a
+   multi-part plan or spec that needs a breakdown or a split; or a request
+   for a breakdown.
    - **Profile once, reuse.** A 1-2k token repo profile is cached in
-     `.reckon/profile.md`, stamped with the commit, and refreshed only from
-     `git diff`. It is built from what already exists: AGENTS.md,
+     `.reckon/profile.md`, stamped with the commit, and refreshed only
+     after 30 changed files or a manifest or CI change. It is built from
+     what already exists: AGENTS.md,
      CLAUDE.md, README, docs and ADRs, then code indexes such as
      [codegraph](https://github.com/colbymchenry/codegraph) and
      [graphify](https://github.com/safishamsi/graphify), then `rg`,
      `ctags`, `ast-grep` and `git log`. It never installs tools or builds
      indexes.
    - **Count rounds.** Modules get a type and a size from fixed anchors,
-     at most one risk factor each and only with evidence, plus 15% for
-     integration. The total is sanity-checked against measured reference
-     classes, and anything over 2 hours at P90 gets a proposed split.
-   - **Combine.** Rounds are converted with measured speed. When both the
-     rounds and the gut guess are calibrated, the estimate is their
-     geometric mean.
+     plus 15% for integration. Risks are notes for the report; they do not
+     change the number. The total is sanity-checked against measured
+     reference classes, and anything over 2 hours at P90 gets a proposed
+     split.
+   - **Which number is reported:**
+
+     | Rounds | Guess | Reported agent time |
+     |---|---|---|
+     | cold | cold or calibrated | the rescaled guess |
+     | calibrated (history ratio or measured speed) | cold | rounds |
+     | calibrated | calibrated | geometric mean of the two |
+
+     The full table lives in
+     [references/calibration.md](references/calibration.md), and the
+     script follows it.
 3. **Add people and waiting.** Human touch points and known waits are
    reported separately; calendar time is driven by them, not by the agent.
-4. **Record outcomes.** After the task, the actual is measured from the
-   agent's transcript (Claude Code today) or entered by hand, and the next
-   estimate is calibrated with it.
+4. **Record outcomes.** At the end of the turn that did the work, the
+   actual is measured from the agent's transcript (Claude Code today) or
+   entered by hand. It measures the one request the estimate was for, from
+   the time the estimate was recorded to the next human prompt, not the
+   whole session.
 
 ## Results
 
@@ -131,13 +154,21 @@ Cost of one estimate:
 
 What this means:
 
+- **The accuracy criterion set in advance was missed.** The target was a
+  median error under 50%. 0.2.0 scored 51% and 0.3.0 scored 56% (95%
+  interval 46-64%). The coverage criteria were met.
 - **After 8 finished tasks:** calibrated estimates are almost unbiased, and
   P50/P90 mean what they say.
-- **Single requests:** expect about +/-50%. Speed per round varies that
-  much on its own.
-- **0.3.0 vs 0.2.0:** same accuracy once calibrated (no significant
-  difference, p = 0.86). The cold start is far better (67% vs 178%), and
-  an estimate costs about half.
+- **Single requests:** expect an error of about half the actual, either
+  way. Speed per round varies that much on its own. Always answering "the
+  recent median" scores 69%, so the method buys about 13 points.
+- **0.3.0 vs 0.2.0:** not distinguishable once calibrated (p = 0.86),
+  though the point estimate is 5 points worse. The cold start is far
+  better (67% vs 178%), and an estimate costs about half.
+- **Cost against the 5% target:** batched, an estimate is under 0.5% of
+  the work's tokens. One quick estimate run on its own in a fresh session
+  cost a median 13% of the work's time and 15% of its tokens, because the
+  median request is only 7 rounds and 1.6 minutes.
 - **Where the accuracy comes from:** calibrating on measured history, not
   from counting rounds. A naive minutes guess rescaled the same way did as
   well, which is why 0.3.0 makes the rescaled guess the default.
@@ -146,11 +177,20 @@ What this means:
 - **Human touches (B):** only a proxy could be checked, and it was weak.
 
 **First validation, 0.1.0:** 20 whole delegated tasks with the anchors
-frozen. Cold start had a median error of 31%. Calibrated, the error was
-30%, with 85% of actuals at or below P90.
+frozen. Cold start had a median error of 31%. This did **not** hold on the
+larger set: the same version's cold-start error on the 200 benchmark
+requests was 296%.
+
+**Limits.** All of this was measured on one team's Claude Code history
+over three weeks, with one harness. Most requests were small (median 1.6
+agent minutes, none over 60), so full mode, the 2-hour split rule and
+multi-hour work are untested. The design was iterated on the same test
+set, so the numbers are optimistic to an unknown degree. The benchmark
+was not re-run for 0.3.1. See "Limits of this benchmark" in
+[references/benchmark.md](references/benchmark.md).
 
 Your models, tools and repos differ. Record actuals for a few tasks and run
-`reckon.py backtest` on your own history; it compares quick and full mode.
+`backtest` on your own history; it compares quick and full mode.
 
 ## Install
 
@@ -162,15 +202,17 @@ Copy the `reckon` folder into your agent's skills folder, for example:
 | Claude Code (one project) | `.claude/skills/reckon/` |
 | Other Agent Skills clients | their skills folder |
 
-Then ask "how long will this take?" or "estimate this backlog".
+Then ask "how long will this take you?" or "estimate this backlog for
+the agent". It is not meant for work that people will do; asked about
+that, the skill says so instead of estimating.
 
 ## Requirements
 
 - Any agent that can read and write files.
-- Python 3 is **optional** (standard library only). Without it, every
+- Python 3.9+ is **optional** (standard library only). Without it, every
   formula is simple enough to apply by hand; only automatic transcript
   measurement is lost.
-- Git is optional; outside a repo the store lives in the current folder.
+- Git is optional; outside a repo the store is `~/.reckon/`.
 
 ## The `.reckon/` folder
 
@@ -188,28 +230,53 @@ Then ask "how long will this take?" or "estimate this backlog".
 - It ignores itself; your `.gitignore` is never edited. To share history
   with your team through git, add `!.gitignore` and `!history.jsonl` to
   `.reckon/.gitignore`.
-- `RECKON_HOME=/some/path` moves it.
-- Only numbers, short titles, task types and the repo folder name are
-  stored. `RECKON_HASH_TITLES=1` stores a hash instead of the title.
-  Nothing is sent anywhere.
+- Outside git it is `~/.reckon/`. `RECKON_HOME=/some/path` moves it.
+- The first time it is created, the script says so and the agent tells
+  you where it is.
+- What is stored, all of it local; nothing is sent anywhere:
+  - `history.jsonl`: per estimate, an id built from the date and the
+    title, the short title, task type, the repo folder name, agent name,
+    model id, the time of the estimate, the numbers, and module names in
+    full mode; per actual, minutes, round counts, the start time, the
+    model id and the first 8 characters of the session id.
+  - `profile.md` and `sources.json`: file counts, folder names, file
+    types, build and CI file names, script commands, the most-changed file
+    paths, the branch name and commit hash, and the agent's notes.
+  - `estimates/*.md`: the full-mode reports the agent writes.
+- `RECKON_HASH_TITLES=1` stores a hash instead of the title and builds
+  the id from that hash. It does not hide the repo folder name, module
+  names or anything in `profile.md` and `estimates/`.
+- `history.jsonl` can be edited by hand. A line the script cannot parse is
+  reported with its line number, skipped for calibration, and kept as it
+  is. Writers take a lock file, so parallel agents do not lose each
+  other's lines.
 
 ## Scripts
 
-Run them from inside the repository you are estimating, by path to the
-skill folder:
+Run them from inside the repository you are estimating. `<skill-dir>` is
+the folder this README is in:
 
 ```
-python3 scripts/reckon.py where                 # create/print the store
-python3 scripts/reckon.py profile               # build or refresh the profile
-python3 scripts/reckon.py record --title "Fix login loop" --type bugfix --guess-min 20 --model <id>   # quick
-python3 scripts/reckon.py calibrate --type feature --rounds 48 --guess 90
-python3 scripts/reckon.py record --title "Add CSV export" --type feature --level full --rounds 48 --guess-min 90 --b-min 25 --c-min 8
-python3 scripts/reckon.py sessions              # list this repo's recent sessions
-python3 scripts/reckon.py actual <id> --session <id-prefix>   # measure that session
-python3 scripts/reckon.py actual <id> --agent-min 9 --wait-min 6   # or by hand
-python3 scripts/reckon.py backfill --limit 200   # seed speed from past sessions
-python3 scripts/reckon.py backtest file.jsonl    # leave-one-out check
+python3 <skill-dir>/scripts/reckon.py where                 # create/print the store
+python3 <skill-dir>/scripts/reckon.py record --title "Fix login loop" --type bugfix --guess-min 20 --model <id>
+        # quick; on an empty history prints a_p50 2.4, a_p90 12.0, method "guess cold"
+python3 <skill-dir>/scripts/reckon.py record --batch backlog.jsonl --model <id>   # one estimate per line
+python3 <skill-dir>/scripts/reckon.py actual <id>                         # measure the request that followed the estimate
+python3 <skill-dir>/scripts/reckon.py actual <id> --turns 2               # ... plus two follow-up turns
+python3 <skill-dir>/scripts/reckon.py sessions                            # list this repo's recent sessions
+python3 <skill-dir>/scripts/reckon.py actual <id> --session <id-prefix>   # pick the session
+python3 <skill-dir>/scripts/reckon.py actual <id> --session <id-prefix> --whole-session   # the whole session did this task
+python3 <skill-dir>/scripts/reckon.py actual <id> --agent-min 9 --wait-min 6   # or by hand
+python3 <skill-dir>/scripts/reckon.py profile               # full mode: build or refresh the profile
+python3 <skill-dir>/scripts/reckon.py calibrate --type feature --rounds 81 --guess 240
+        # on an empty history prints a_p50 28.8, a_p90 144.0, used "guess cold"
+python3 <skill-dir>/scripts/reckon.py record --title "Notification preferences" --type feature --rounds 81 --guess-min 240 --b-min 50 --c-min 30
+python3 <skill-dir>/scripts/reckon.py backfill --limit 200   # seed measured speed from past sessions
+python3 <skill-dir>/scripts/reckon.py backtest file.jsonl    # leave-one-out check
 ```
+
+Tests: `python3 -m unittest discover -s tests` from the skill folder
+(synthetic data only).
 
 Adding another agent's logs: write a module in `scripts/adapters/` with
 `NAME`, `list_sessions()` and `measure()` (see `adapters/__init__.py`) and
@@ -218,11 +285,41 @@ register it.
 ## Evidence
 
 See [references/benchmark.md](references/benchmark.md) for the full
-benchmark, and [references/evidence.md](references/evidence.md): AgentTime (agents
-overestimate 2.6-3.8x), METR time horizons (reliability falls with task
-length), agentpace (3,383 measured runs, heavy tails), DORA 2025 (the
-bottleneck moves to review and delivery).
+benchmark, the skill's own measurement. Background reading is listed in
+[references/evidence.md](references/evidence.md): METR time horizons,
+agentpace, DORA 2025 and others. Their figures are quoted there as each
+source reports them and were not re-checked for this release; one of
+them, AgentTime, is secondhand with no primary source linked.
 
 ## License
 
-MIT. Version 0.3.0.
+MIT. Version 0.3.1.
+
+## Changelog
+
+**0.3.1** (fixes from two reviews; the benchmark was not re-run)
+
+- `actual` measures the one request an estimate was for (from the time
+  `record` stored to the next human prompt; `--turns N` for follow-ups),
+  not the whole session. `--whole-session` is the explicit option.
+- One rule for rounds against guess, in calibration.md, and the script,
+  the examples and this README follow it. Measured speed now counts as
+  calibrated rounds.
+- The 40-item window is taken per method and the same-model rule inside
+  it; `backfill` keeps history in start-time order (run it once to
+  re-sort a 0.3.0 store).
+- History is safer: unparsed lines are kept and reported, writers take a
+  lock, input is validated, `--a-p50` entries are stored as `manual`,
+  hashed titles no longer leak through the id.
+- A P90 not above its P50 falls back to the cold spread with LOW
+  confidence; `record` prints the corrected wait; `record --batch`.
+- Full mode moved to `references/full-mode.md` and is presented as
+  structure, not accuracy; risk multipliers became notes.
+- Out of scope stated: work that people will do.
+- Outside git the store is `~/.reckon/` instead of the current folder.
+- The README states the missed accuracy criterion and the benchmark's
+  limits. New evals with fixtures, and a test suite.
+
+**0.3.0** Quick mode (the rescaled gut guess) became the default.
+
+**0.2.0** 40-item window, same-model rule, single-request reference class.
