@@ -1,66 +1,138 @@
 {
   "skill_name": "reckon",
+  "setup": "Run every eval in a fresh copy of an empty git repository with RECKON_HOME pointing at a scratch folder, so nothing is written to a real store. Evals that list files: copy evals/fixtures/store to the scratch folder and point RECKON_HOME at the copy; point CLAUDE_CONFIG_DIR at evals/fixtures/claude-config (a synthetic transcript, cwd /work/example-app, so pass --any-project). The fixture history has 12 finished quick-mode items by example-model-1 (g50 = 0.21, g90 = 0.40) and one open estimate, fixture-fix-footer-typo (5-minute guess, P50 1.1, P90 2.0). The fixture session f1x7ure0 holds three requests: 30 minutes of earlier work, the 1.0-minute footer fix, and 5 minutes of later work (36.1 minutes in all). Rebuild them with evals/fixtures/build_fixtures.py. Grade against the answer and against the lines added to history.jsonl.",
   "evals": [
     {
       "id": 1,
+      "name": "quick estimate, cold start",
       "prompt": "How long will it take you to add a CSV export button to the orders page? It should export the same columns as the table and respect the current filters. The repo has a React frontend in web/ and a FastAPI backend in api/.",
-      "expected_output": "A quick-mode reckon estimate: one or two lines with agent time as P50-P90 minutes from the rescaled gut guess, the confidence, and human or wait time only if needed. Recorded in history with guess_min.",
+      "expected_output": "A quick-mode estimate in one or two lines: agent time as a P50-P90 range in minutes from the rescaled gut guess, low confidence because there is no history. One line appended to history.jsonl.",
       "files": [],
       "expectations": [
-        "The answer gives agent time as a P50 and a P90 in minutes, not a single number",
-        "It uses quick mode: no module table or round count",
+        "The answer gives agent time as two numbers, a P50 and a P90, in minutes",
+        "history.jsonl has exactly one new line; it has estimate.guess_min, a ts, and estimate.method \"guess cold\"",
+        "In that line a_p50 equals guess_min x 0.12 and a_p90 equals guess_min x 0.6 (to one decimal), and the answer reports those two numbers, rounded",
+        "The answer does not show the raw gut guess (the guess_min value) as an estimate, and does not say the guess was halved, discounted or otherwise adjusted by the agent",
+        "The answer states low confidence or cold start",
+        "The answer contains no module table and no round count",
         "The answer contains no man-days, man-hours, days or story points as the estimate",
-        "The estimate is recorded in .reckon/history.jsonl with a guess_min",
-        "A confidence level or the calibration basis is stated (LOW / cold start when there is no history)"
+        "No file under web/ or api/ was read before the estimate was given"
       ]
     },
     {
       "id": 2,
-      "prompt": "Our sprint sheet says 'Migrate user avatars from local disk to S3: 3 days'. The agent will do it. Is 3 days right?",
-      "expected_output": "Compares the 3-day figure with an agent-based estimate instead of adopting it; flags data migration risk; includes deploy/wait and human review time.",
-      "files": [],
+      "name": "quick estimate, calibrated",
+      "prompt": "You are running as model example-model-1. How long will it take you to add a 'copy link' button next to each order row? The handler only needs to copy the order URL to the clipboard.",
+      "expected_output": "A quick-mode estimate rescaled with the fixture history: P50 = guess x 0.21 and P90 = guess x 0.40, described as calibrated on 12 past tasks.",
+      "files": ["evals/fixtures/store/history.jsonl"],
       "expectations": [
-        "The answer does not adopt the 3-day figure as the estimate",
-        "It reports a P50/P90 range for agent time in minutes or hours",
-        "It mentions the migration run or deploy as a wait, or the person's review, separately from agent time",
-        "If it uses full mode, it applies at most one risk factor per module (R4 for the data migration) and does not stack factors",
-        "It recommends a split or a dry run if the P90 exceeds 2 hours, or states that no split is needed"
+        "history.jsonl has one new line with estimate.method \"guess calibrated\" and estimate.confidence \"MEDIUM\"",
+        "In that line a_p50 equals guess_min x 0.21 and a_p90 equals guess_min x 0.40 (to one decimal); it does not equal guess_min x 0.12 and guess_min x 0.6",
+        "The answer reports that P50-P90 range and says it is calibrated on past tasks (12), not cold start or low confidence",
+        "The answer does not show the raw gut guess as an estimate",
+        "The 13 existing lines of history.jsonl are unchanged"
       ]
     },
     {
       "id": 3,
-      "prompt": "Estimate this backlog for our agent: (1) fix the login redirect loop on Safari, (2) add rate limiting to the public API, (3) rewrite the billing module from Python 2 to Python 3, (4) update the README badges.",
-      "expected_output": "One line per item with type, size, rounds and P50/P90; the billing rewrite is flagged for splitting; the README item is XS.",
+      "name": "a day count for agent work",
+      "prompt": "Our sprint sheet says 'Migrate user avatars from local disk to S3: 3 days'. The agent will do it. Is 3 days right?",
+      "expected_output": "Compares the 3-day figure with an agent-time range instead of adopting it, and names the human approval or the migration run separately from agent time.",
       "files": [],
       "expectations": [
-        "It uses full mode because the request is a backlog with several parts",
-        "Each of the four items gets its own estimate",
-        "The README badge item is sized XS or S",
-        "The billing rewrite is flagged as too large and split into pieces with checkpoints",
-        "Every estimate uses minutes or hours of agent time, never days",
-        "Risk factors are not multiplied together"
+        "The answer does not adopt 3 days (or any number of days) as the estimate",
+        "It reports agent time as a P50/P90 range in minutes or hours and compares it with the 3-day figure in a sentence",
+        "It names at least one human touch (a review or an approval of the data migration) or one wait (the migration run or a deploy) separately from agent time",
+        "The reported range equals the a_p50 and a_p90 stored in the new history.jsonl line (rounded); no risk multiplier was applied on top",
+        "history.jsonl has one new line with estimate.guess_min"
       ]
     },
     {
       "id": 4,
-      "prompt": "That export task is done. Record how long it really took.",
-      "expected_output": "Records the actual for the matching estimate in .reckon/history.jsonl, from the agent session if possible or by asking for start/end times; never invents numbers.",
+      "name": "backlog: quick guesses in one pass",
+      "prompt": "Estimate this backlog for our agent: (1) fix the login redirect loop on Safari, (2) add rate limiting to the public API, (3) rewrite the billing module from Python 2 to Python 3, (4) update the README badges.",
+      "expected_output": "Four quick-mode estimates made in one pass and recorded together (record --batch, or four hand-written lines), one P50/P90 range per item. Only an item whose P90 is over 2 hours is sent to full mode.",
       "files": [],
       "expectations": [
-        "The agent looks for the matching estimate in .reckon/history.jsonl",
-        "It measures the actual from the session transcript or asks for times; it does not invent an actual",
-        "It reports the actual next to the estimated P50/P90"
+        "history.jsonl has exactly four new lines, each with estimate.guess_min, and they were written by one record --batch call or in one edit, not by reading code between items",
+        "The answer gives each of the four items its own P50-P90 range in minutes or hours, never days",
+        "The README badges item has the smallest a_p50 of the four",
+        "Every item whose stored a_p90 is above 120 minutes is named in the answer as needing a breakdown or a split; every item whose a_p90 is 120 or less has no module table",
+        "No item's range was adjusted with a risk multiplier: each reported range equals its stored a_p50 and a_p90 (rounded)"
       ]
     },
     {
       "id": 5,
-      "prompt": "Python is not installed on this machine. How long would it take you to add a dark mode toggle to the settings page?",
-      "expected_output": "Runs the method by hand: profile or Quick read, modules and rounds, cold-start formula 0.2 min/round and x3 for P90, B and C buckets, and appends to history.jsonl manually.",
+      "name": "a guess above the full-mode threshold",
+      "prompt": "How long will it take you to port our whole payments service from Python 2 to Python 3? It is about 60 files and 15,000 lines, with its own dependency upgrades, and the CI pipeline has to be moved to a new image as part of it.",
+      "expected_output": "The quick P90 comes out over 2 hours, so the agent switches to full mode: a module breakdown, the three buckets, and a proposed split into pieces with checkpoints. The reported agent time is what the script printed.",
       "files": [],
       "expectations": [
-        "The agent does not stop because Python is missing",
-        "It applies the quick-mode formula by hand (guess x 0.12 for P50 and x 0.6 for P90 at cold start) or a calibrated ratio from history",
-        "It reports agent time as P50/P90 in minutes and names any human or wait time separately"
+        "The stored a_p90 is above 120 minutes (the premise of this eval; if it is not, the run is void rather than passed)",
+        "The answer contains a module table with rounds per module and a total",
+        "The answer proposes a split into at least two pieces and names a checkpoint for each",
+        "The reported agent-time range equals the stored a_p50 and a_p90 (rounded): at cold start that is guess_min x 0.12 and x 0.6, not rounds x 0.2",
+        "Risks, if any are listed, appear as notes; the rounds in the table are not multiplied by a risk factor",
+        "The answer does not present the breakdown as making the estimate more accurate",
+        "Agent time is not given in days"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "actual in a session that did other work too",
+      "prompt": "The footer typo fix is done (estimate id fixture-fix-footer-typo). It was done in session f1x7ure0, which also did other work before and after it. Record how long it really took.",
+      "expected_output": "Records the actual for that one request, 1.0 agent minutes, not the 36.1 minutes of the whole session, and reports it next to the estimated 1.1-2.0 minutes.",
+      "files": [
+        "evals/fixtures/store/history.jsonl",
+        "evals/fixtures/claude-config/projects/-work-example-app/f1x7ure0-0000-4000-8000-000000000001.jsonl"
+      ],
+      "expectations": [
+        "The line fixture-fix-footer-typo in history.jsonl now has actual.agent_min equal to 1.0",
+        "actual.agent_min is not 36.1 and --whole-session was not used",
+        "actual.scope is \"request\" (or, if entered by hand, actual.source is \"manual\" and the 1.0 was taken from the transcript's timestamps, not made up)",
+        "The answer reports the actual next to the estimated P50 and P90 (1.1 and 2.0 minutes)",
+        "The other 12 lines of history.jsonl are unchanged"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "no Python",
+      "prompt": "Python is not installed on this machine. How long would it take you to add a dark mode toggle to the settings page?",
+      "expected_output": "Quick mode by hand: gut guess, cold-start factors 0.12 and 0.6, a one- or two-line answer with low confidence, and one hand-written line appended to .reckon/history.jsonl.",
+      "files": [],
+      "expectations": [
+        "The agent gives an estimate; it does not stop or ask for Python to be installed",
+        "No Python interpreter was run",
+        "The answer gives agent time as a P50 and a P90 in minutes and states low confidence or cold start",
+        "history.jsonl has one new line that is valid JSON on a single line, with id, ts, type, estimate.guess_min, estimate.a_p50 and estimate.a_p90",
+        "In that line a_p50 equals guess_min x 0.12 and a_p90 equals guess_min x 0.6",
+        "The answer contains no module table"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "work that people will do: decline the method",
+      "prompt": "Our team of four developers will build the new billing module next sprint, by hand, no agents. How many story points should we plan for it?",
+      "expected_output": "Says that reckon only sizes work an AI agent will do and does not apply here. It may help in the team's own units, but gives no agent-minute estimate and records nothing.",
+      "files": [],
+      "expectations": [
+        "The answer says the method applies only to work done by an AI agent, or that it does not apply to this request",
+        "The answer gives no P50/P90 range in agent minutes for the team's work",
+        "history.jsonl is unchanged (no new line) and no .reckon store was created for this request",
+        "The answer does not refuse story points on the grounds that reckon forbids them"
+      ]
+    },
+    {
+      "id": 9,
+      "name": "should not trigger",
+      "should_trigger": false,
+      "prompt": "Plan the scope of the v2 API for me: which of the current endpoints should we keep, which should we merge, and which should we drop?",
+      "expected_output": "An API scoping answer. The reckon skill is not used: the request is about what to build, not how long it takes.",
+      "files": [],
+      "expectations": [
+        "The reckon skill was not loaded, or if loaded was not applied",
+        "The answer contains no P50/P90 agent-time estimate",
+        "No reckon script was run and history.jsonl is unchanged"
       ]
     }
   ]
