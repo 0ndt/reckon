@@ -7,6 +7,51 @@ AI coding agents the way that work actually behaves: in agent minutes,
 split into agent time, human touch time and wait time, reported as P50/P90
 ranges and corrected by what past tasks really took.
 
+## Try it on work you have already done
+
+Before installing anything, see what reckon would have said about your own
+recent requests. From inside a repository you have worked on with Claude
+Code:
+
+```
+python3 <skill-dir>/scripts/replay.py            # 12 recent requests, one model call
+python3 <skill-dir>/scripts/replay.py --list     # only show which requests it would use
+```
+
+It picks your 12 most recent finished requests from the local transcripts,
+asks the agent for its gut guess on all of them in one batched call, and
+puts side by side, for each request:
+
+- how long it really took (agent minutes, measured from the transcript),
+- the agent's raw answer to "how long will this take you?",
+- reckon at cold start (no history of yours yet),
+- reckon once calibrated on your history (leave-one-out over the 12),
+
+with the median error, how often the actual landed at or below P50 and
+P90, and what the estimating cost: seconds, tokens and dollars, in total,
+per request, and as a share of the work it sized. A run takes seconds and
+costs a few cents. It writes a report to `.reckon/replay/` and nothing to
+the history. Example from one real run (request text removed):
+
+| | Median error | Actual / P50 | At or below P50 | At or below P90 |
+|---|---|---|---|---|
+| Agent's raw answer | 341% | 0.19 | 92% | n/a |
+| reckon, cold start | 75% | 2.11 | 25% | 83% |
+| reckon, calibrated | 51% | 0.82 | 50% | 83% |
+
+| Cost of estimating 12 requests | Total | Per request | Share of the work |
+|---|---|---|---|
+| Time | 6 s | 0.5 s | 0.1% of 106 agent minutes |
+| Tokens | 8,182 | 681 | 0.01% |
+| Dollars (API prices) | 0.023 | 0.002 | |
+
+It is a quick look, not the benchmark: the estimator sees only the request
+text (not the repository), 12 requests move a lot from one sample to the
+next, and the request text is sent to the model through your own `claude`
+CLI. Options: `-n 6` (3-30 requests), `--model haiku`, `--any-project`,
+`--hide-text`. With another agent, `--prompt-only` prints the prompt and
+`--guesses file.jsonl` scores the answers you got back.
+
 ## Why the name
 
 *To reckon* means to estimate or work something out ("I reckon it'll take
@@ -288,7 +333,11 @@ python3 <skill-dir>/scripts/reckon.py calibrate --type feature --rounds 81 --gue
 python3 <skill-dir>/scripts/reckon.py record --title "Notification preferences" --type feature --rounds 81 --guess-min 240 --b-min 50 --c-min 30
 python3 <skill-dir>/scripts/reckon.py backfill --limit 200   # seed measured speed from past sessions (5+ rounds each)
 python3 <skill-dir>/scripts/reckon.py backtest file.jsonl    # leave-one-out check
+python3 <skill-dir>/scripts/replay.py                       # try reckon on your own past requests (see the top)
 ```
+
+`replay.py` is a demonstration, not part of the skill: SKILL.md never
+loads it and agents do not need it.
 
 Tests: `python3 -m unittest discover -s tests` from the skill folder
 (synthetic data only).
@@ -308,9 +357,15 @@ them, AgentTime, is secondhand with no primary source linked.
 
 ## License
 
-MIT. Version 0.3.2.
+MIT. Version 0.4.0.
 
 ## Changelog
+
+**0.4.0**
+
+- `scripts/replay.py`: try reckon on your own recent requests. One batched
+  model call; shows actual minutes, the raw guess, reckon cold and
+  calibrated, and what the estimating cost. Not loaded by the skill.
 
 **0.3.2** (benchmark re-run on the 0.3.1 text)
 

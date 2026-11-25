@@ -4,7 +4,9 @@ description: Estimates how long software work will take when an AI coding agent 
 license: MIT
 compatibility: Any agent that can read and write files. Python 3.9+ (standard library only) is optional; without it every step runs by hand. Automatic session measurement currently supports Claude Code transcripts.
 metadata:
-  version: "0.3.2"
+  version: "0.4.0"
+  author: 0ndt
+  repository: https://github.com/0ndt/reckon
 ---
 
 # reckon
