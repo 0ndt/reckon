@@ -227,8 +227,13 @@ An actual measured from a transcript looks like this:
 
 ## How actuals are measured
 
-`actual <id>` (Claude Code transcripts) measures **one request**, not the
-session:
+`actual <id>` measures **one request**, not the session. It reads the
+session logs of Claude Code (default), OpenCode (`--agent opencode`, its
+local SQLite database) or Codex CLI (`--agent codex`, its rollout files).
+All three are turned into the same event list and measured by the same
+code (`scripts/adapters/common.py`), so a round, a turn and `agent_min`
+mean the same for each; per-agent notes are in each adapter's docstring.
+For one request:
 
 - It starts at the estimate's `ts` and stops at the next human prompt.
 - If the agent called no tool between `ts` and the end of that turn (it
@@ -272,7 +277,7 @@ start-time order.
 
 ## Recording actuals by hand
 
-Without the Claude Code adapter, or without Python:
+For an agent without an adapter, or without Python:
 
 1. Note the time when the agent starts on the request and when it hands
    back each time.

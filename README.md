@@ -18,6 +18,7 @@ Code:
 ```
 python3 <skill-dir>/scripts/replay.py            # 12 recent requests, one model call
 python3 <skill-dir>/scripts/replay.py --list     # only show which requests it would use
+python3 <skill-dir>/scripts/replay.py --agent opencode   # or --agent codex: replay those sessions
 ```
 
 It picks your 12 most recent finished requests from the local transcripts,
@@ -163,7 +164,8 @@ Method: guess cold · Confidence: LOW · Split proposed: 3 pieces · Top risk: p
 3. **Add people and waiting.** Human touch points and known waits are
    reported separately; calendar time is driven by them, not by the agent.
 4. **Record outcomes.** At the end of the turn that did the work, the
-   actual is measured from the agent's transcript (Claude Code today) or
+   actual is measured from the agent's session log (Claude Code, OpenCode
+   or Codex CLI) or
    entered by hand. It measures the one request the estimate was for, from
    the time the estimate was recorded to the next human prompt, not the
    whole session.
@@ -274,6 +276,9 @@ that, the skill says so instead of estimating.
 - Python 3.9+ is **optional** (standard library only). Without it, every
   formula is simple enough to apply by hand; only automatic transcript
   measurement is lost.
+- Automatic measurement reads Claude Code transcripts, the OpenCode 2.x
+  session database and Codex CLI rollout files (tested with OpenCode 2.2.5
+  and Codex CLI 0.172.0). Other agents record actuals by hand.
 - Git is optional; outside a repo the store is `~/.reckon/`.
 
 ## The `.reckon/` folder
@@ -344,9 +349,12 @@ loads it and agents do not need it.
 Tests: `python3 -m unittest discover -s tests` from the skill folder
 (synthetic data only).
 
-Adding another agent's logs: write a module in `scripts/adapters/` with
-`NAME`, `list_sessions()` and `measure()` (see `adapters/__init__.py`) and
-register it.
+Session logs: `--agent claude-code` (default), `--agent opencode` or
+`--agent codex` on `actual`, `sessions`, `backfill` and `replay.py`.
+Adding another agent: write a module in `scripts/adapters/` that turns a
+session into a `common.Trace` (see `adapters/__init__.py`), register it,
+and add a scrubbed real session to `tests/fixtures/adapters/` so the
+contract tests in `tests/test_adapters.py` cover it.
 
 ## Evidence
 
@@ -362,6 +370,16 @@ them, AgentTime, is secondhand with no primary source linked.
 MIT. Version 0.4.1.
 
 ## Changelog
+
+**Unreleased**
+
+- Measured actuals for OpenCode (`--agent opencode`) and Codex CLI
+  (`--agent codex`), on `actual`, `sessions`, `backfill` and `replay.py`.
+- All adapters share one measurement core (`scripts/adapters/common.py`);
+  the Claude Code numbers are unchanged (checked on 60 real sessions).
+- Contract tests on scrubbed real sessions (timings kept, text removed).
+- Sessions are matched by each agent's own id (`--session <prefix>`);
+  OpenCode and Codex ids keep more characters in history so they stay unique.
 
 **0.4.1**
 

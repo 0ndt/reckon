@@ -2,7 +2,7 @@
 name: reckon
 description: Estimates how long software work will take when an AI coding agent does it, as a P50/P90 range of agent minutes calibrated on measured history of past agent work, with human touch time and wait time kept separate. Use when someone asks how long a task, feature, fix or backlog will take an agent, asks to estimate or size agent work or fill an effort column, quotes days or story points for agent-built work, or when recording how long a task actually took. Not for work that people will do.
 license: MIT
-compatibility: Any agent that can read and write files. Python 3.9+ (standard library only) is optional; without it every step runs by hand. Automatic session measurement currently supports Claude Code transcripts.
+compatibility: Any agent that can read and write files. Python 3.9+ (standard library only) is optional; without it every step runs by hand. Automatic session measurement reads Claude Code, OpenCode and Codex CLI session logs.
 metadata:
   version: "0.4.1"
   author: 0ndt
@@ -99,8 +99,9 @@ comes out over 2 hours.
    if you stopped after reporting the estimate, the go-ahead turn that
    followed). If later prompts continued the same request, run it again
    with `--turns N`. If the work ran in another session, pick it with
-   `sessions`, then `actual <id> --session <id-prefix>`. Not on Claude
-   Code: `actual <id> --agent-min <minutes>`. Never invent an actual.
+   `sessions`, then `actual <id> --session <id-prefix>`. On OpenCode or
+   Codex CLI add `--agent opencode` or `--agent codex`; other agents:
+   `actual <id> --agent-min <minutes>`. Never invent an actual.
 
 ### Without Python
 

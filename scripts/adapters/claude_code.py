@@ -42,9 +42,11 @@ import os
 import re
 from datetime import datetime
 
+from .common import IDLE_THRESHOLD_S, WAIT_THRESHOLD_S, Trace, compute  # noqa: F401
+from .common import requests as common_requests
+from .common import window as _window  # noqa: F401
+
 NAME = "claude-code"
-WAIT_THRESHOLD_S = 120
-IDLE_THRESHOLD_S = 600
 WAIT_TOOLS = {"Bash", "BashOutput", "Monitor", "PowerShell"}
 AUTO_PREFIXES = (
     "[Request interrupted",
@@ -130,50 +132,12 @@ def _is_human(rec):
     return True
 
 
-def _window(humans, round_ts, since, turns):
-    """Pick the part of a session that belongs to one request.
-
-    Returns (t_from, t_to, starts_at_prompt, first_is_request)."""
-    inf = float("inf")
-    before = [k for k, h in enumerate(humans) if h <= since]
-    if not before:
-        # The estimate was made before this session began: its first turn.
-        k, t_from, at_prompt, first = 0, humans[0], True, True
-    else:
-        k = before[-1]
-        end = humans[k + 1] if k + 1 < len(humans) else inf
-        worked = any(since < t < end for t in round_ts)
-        if worked or k + 1 >= len(humans):
-            t_from, at_prompt, first = since, False, False
-        else:
-            # Nothing but the estimate itself in that turn: the work is the
-            # next turn, and its prompt (the go-ahead) is a human turn.
-            k += 1
-            t_from, at_prompt, first = humans[k], True, False
-    last = k + max(0, turns)
-    t_to = humans[last + 1] if last + 1 < len(humans) else inf
-    return t_from, t_to, at_prompt, first
-
-
-def measure(path, since=None, turns=0):
-    """Measure one transcript, or one request in it when `since` is given.
-
-    `since` is a Unix time (when the estimate was recorded); see the module
-    docstring for which turns are then measured. Returns a dict, or None when
-    the transcript holds no human prompt or nothing after `since`."""
-    events = []          # (ts, kind) for main-chain user/assistant records
-    humans = []          # timestamps of human prompts
-    first_prompt = None
+def load(path):
+    """Read one transcript into a common.Trace."""
+    trace = Trace(os.path.splitext(os.path.basename(path))[0], NAME)
     round_ts = {}        # round id -> timestamp
-    model_ts = []        # (ts, model) per assistant record
     tool_start = {}      # tool_use_id -> (ts, name)
-    waits = []           # (start, end) of long shell/monitor tool calls
-    title = None
-    prs = []
-    cost = None
-    session_id = os.path.splitext(os.path.basename(path))[0]
-    cwd = branch = None
-
+    seen_usage = set()
     with open(path, encoding="utf-8", errors="replace") as fh:
         for line in fh:
             try:
@@ -184,115 +148,67 @@ def measure(path, since=None, turns=0):
                 continue
             kind = rec.get("type")
             if kind == "ai-title":
-                title = rec.get("aiTitle") or title
-            elif kind == "summary" and not title:
-                title = rec.get("summary")
+                trace.title = rec.get("aiTitle") or trace.title
+            elif kind == "summary" and not trace.title:
+                trace.title = rec.get("summary")
             elif kind == "pr-link" and rec.get("prUrl"):
-                if rec["prUrl"] not in prs:
-                    prs.append(rec["prUrl"])
+                if rec["prUrl"] not in trace.prs:
+                    trace.prs.append(rec["prUrl"])
             elif kind == "cost-state":
-                cost = rec
+                trace.cost = {"cost_usd": round(rec.get("totalCostUSD") or 0, 2),
+                              "lines_changed": (rec.get("totalLinesAdded") or 0) + (rec.get("totalLinesRemoved") or 0)}
             if kind not in ("user", "assistant") or rec.get("isSidechain"):
                 continue
             ts = _ts(rec.get("timestamp"))
             if ts is None:
                 continue
-            cwd = rec.get("cwd") or cwd
-            branch = rec.get("gitBranch") or branch
+            trace.cwd = rec.get("cwd") or trace.cwd
+            trace.branch = rec.get("gitBranch") or trace.branch
             msg = rec.get("message") or {}
             if kind == "assistant":
                 if msg.get("model") and not msg["model"].startswith("<"):
-                    model_ts.append((ts, msg["model"]))
+                    trace.models.append((ts, msg["model"]))
+                mid = msg.get("id") or rec.get("requestId") or rec.get("uuid")
+                usage = msg.get("usage") or {}
+                if usage and mid not in seen_usage:
+                    seen_usage.add(mid)
+                    trace.usage.append((ts, sum(int(usage.get(k) or 0) for k in (
+                        "input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens")), None))
                 content = msg.get("content") or []
                 for block in content if isinstance(content, list) else []:
                     if isinstance(block, dict) and block.get("type") == "tool_use":
-                        round_ts.setdefault(msg.get("id") or rec.get("requestId") or rec.get("uuid"), ts)
+                        round_ts.setdefault(mid, ts)
                         tool_start[block.get("id")] = (ts, block.get("name"))
-                events.append((ts, "agent"))
+                trace.events.append((ts, "agent"))
             else:
                 if _is_human(rec):
-                    humans.append(ts)
-                    events.append((ts, "human"))
-                    text = clean_prompt(_text_of(msg.get("content")))
-                    if first_prompt is None and not text.startswith("/"):
-                        first_prompt = text
+                    trace.events.append((ts, "human"))
+                    trace.prompts.append((ts, clean_prompt(_text_of(msg.get("content"))) or ""))
                     continue
                 content = msg.get("content")
                 for block in content if isinstance(content, list) else []:
                     if isinstance(block, dict) and block.get("type") == "tool_result":
                         start = tool_start.pop(block.get("tool_use_id"), None)
                         if start and start[1] in WAIT_TOOLS and ts - start[0] > WAIT_THRESHOLD_S:
-                            waits.append((start[0], ts))
-                events.append((ts, "agent"))
+                            trace.waits.append((start[0], ts))
+                trace.events.append((ts, "agent"))
+    trace.rounds = list(round_ts.values())
+    return trace
 
-    if not humans:
-        return None
-    events.sort()
-    humans.sort()
-    if since is None:
-        scope = "session"
-        t_from, t_to, at_prompt, first_is_request = events[0][0], float("inf"), True, True
-    else:
-        scope = "request"
-        t_from, t_to, at_prompt, first_is_request = _window(humans, list(round_ts.values()), since, turns)
-    inside = [(ts, who) for ts, who in events if t_from <= ts < t_to and (at_prompt or ts > t_from)]
-    if not inside:
-        return None
 
-    agent_s = wait_s = idle_s = gap_s = 0.0
-    in_turn = not at_prompt
-    prev = None if at_prompt else t_from
-    for ts, who in inside:
-        if who == "human":
-            if in_turn and prev is not None:
-                gap_s += max(0.0, ts - prev)
-            in_turn, prev = True, ts
-            continue
-        if not in_turn or prev is None:
-            continue
-        step = max(0.0, ts - prev)
-        covered = sum(max(0.0, min(ts, b) - max(prev, a)) for a, b in waits)
-        covered = min(step, covered)
-        wait_s += covered
-        rest = step - covered
-        if rest > IDLE_THRESHOLD_S:
-            idle_s += rest
-        else:
-            agent_s += rest
-        prev = ts
+def session_name(path):
+    return os.path.splitext(os.path.basename(path))[0]
 
-    prompts_inside = sum(1 for h in humans if t_from <= h < t_to)
-    models = {}
-    for ts, name in model_ts:
-        if t_from <= ts < t_to:
-            models[name] = models.get(name, 0) + 1
-    if not models:
-        for _ts_, name in model_ts:
-            models[name] = models.get(name, 0) + 1
-    if not title and first_prompt:
-        title = first_prompt.splitlines()[0][:80]
-    result = {
-        "session_id": session_id,
-        "source": NAME,
-        "scope": scope,
-        "title": title or session_id,
-        "start": datetime.fromtimestamp(t_from).isoformat(timespec="minutes"),
-        "cwd": cwd,
-        "branch": branch,
-        "model": max(models, key=models.get) if models else None,
-        "prs": prs,
-        "rounds": sum(1 for t in round_ts.values() if t_from <= t < t_to and (at_prompt or t > t_from)),
-        "agent_min": round(agent_s / 60, 1),
-        "wait_min": round(wait_s / 60, 1),
-        "idle_min": round(idle_s / 60, 1),
-        "human_turns": max(0, prompts_inside - (1 if first_is_request else 0)),
-        "human_gap_min": round(gap_s / 60, 1),
-        "wall_min": round((inside[-1][0] - t_from) / 60, 1),
-        "prompts": len(humans),                       # human prompts in the whole session
-        "other_prompts": len(humans) - prompts_inside,  # ... outside the measured part
-    }
-    if cost:
-        result["cost_usd"] = round(cost.get("totalCostUSD") or 0, 2)
-        result["lines_changed"] = (cost.get("totalLinesAdded") or 0) + (cost.get("totalLinesRemoved") or 0)
-    result["first_prompt"] = first_prompt or ""
-    return result
+
+def measure(path, since=None, turns=0):
+    """Measure one transcript, or one request in it when `since` is given.
+
+    `since` is a Unix time (when the estimate was recorded); see the module
+    docstring for which turns are then measured. Returns a dict, or None when
+    the transcript holds no human prompt or nothing after `since`."""
+    return compute(load(path), since=since, turns=turns)
+
+
+def requests(path):
+    return common_requests(load(path))
+

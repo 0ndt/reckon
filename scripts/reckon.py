@@ -860,6 +860,15 @@ def _in_project(m, root):
         return False
 
 
+def _session_name(ad, path):
+    name = getattr(ad, "session_name", None)
+    return name(path) if name else os.path.basename(path)
+
+
+def _short(ad, session_id):
+    return session_id[:getattr(ad, "SHORT_ID", 8)]
+
+
 def _find(entries, item_id):
     for e in entries:
         if e["item"] is not None and e["item"].get("id") == item_id:
@@ -876,7 +885,7 @@ def _measure_for(args, item):
         sys.exit("--turns needs an estimate with a recorded time (ts) and cannot be used with --whole-session")
     sessions = ad.list_sessions(None if args.any_project else root)
     if args.session and args.session != "latest":
-        sessions = [p for p in sessions if os.path.basename(p).startswith(args.session)]
+        sessions = [p for p in sessions if _session_name(ad, p).startswith(args.session)]
     for p in sessions:
         m = ad.measure(p, since=since, turns=args.turns) if since is not None else ad.measure(p)
         if not m or not (args.any_project or _in_project(m, root)):
@@ -905,7 +914,7 @@ def cmd_actual(args):
     else:
         m, since = _measure_for(args, found["item"])
         actual = _public(m)
-        actual["sessions"] = [actual.pop("session_id")[:8]]
+        actual["sessions"] = [_short(_adapter(args.agent), actual.pop("session_id"))]
         if since is None and m.get("prompts", 1) > 1:
             why = "--whole-session was given" if args.whole_session else \
                 "this estimate has no recorded time (ts), so no single request could be selected"
@@ -968,7 +977,7 @@ def cmd_backfill(args):
         added = 0
         for m in measured:
             actual = _public(m)
-            sid = actual.pop("session_id")[:8]
+            sid = _short(ad, actual.pop("session_id"))
             if sid in known:
                 continue
             known.add(sid)
@@ -1115,7 +1124,8 @@ def main(argv=None):
     sp.add_argument("--turns", type=_count, default=0, help="follow-up turns that belong to the request")
     sp.add_argument("--whole-session", action="store_true",
                     help="measure the whole session instead of the one request after the estimate")
-    sp.add_argument("--agent", default="claude-code", help="which transcript adapter to use")
+    sp.add_argument("--agent", default="claude-code", choices=sorted(ADAPTERS),
+                    help="whose session logs to read (default claude-code)")
     sp.add_argument("--any-project", action="store_true")
     sp.add_argument("--agent-min", type=_above_zero)
     sp.add_argument("--rounds", type=_whole_above_zero)
@@ -1127,7 +1137,8 @@ def main(argv=None):
 
     for name, fn, limit in (("sessions", cmd_sessions, 10), ("backfill", cmd_backfill, 200)):
         sp = sub.add_parser(name)
-        sp.add_argument("--agent", default="claude-code", help="which transcript adapter to use")
+        sp.add_argument("--agent", default="claude-code", choices=sorted(ADAPTERS),
+                    help="whose session logs to read (default claude-code)")
         sp.add_argument("--limit", type=int, default=limit)
         sp.add_argument("--any-project", action="store_true")
         sp.set_defaults(fn=fn)
