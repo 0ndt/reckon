@@ -43,7 +43,7 @@ from datetime import datetime
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import reckon  # noqa: E402
-from adapters import claude_code as cc  # noqa: E402
+from adapters import ADAPTERS  # noqa: E402
 
 DEFAULT_N = 12
 MAX_N = 30
@@ -66,54 +66,9 @@ when given, the message before it. Return ONLY JSON lines, one per request, no p
 
 # ---------------------------------------------------------------- transcripts
 
-def _read(path):
-    """Main-chain records of one transcript, in file order."""
-    out = []
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        for line in fh:
-            try:
-                rec = json.loads(line)
-            except ValueError:
-                continue
-            if isinstance(rec, dict) and rec.get("type") in ("user", "assistant") and not rec.get("isSidechain"):
-                ts = cc._ts(rec.get("timestamp"))
-                if ts is not None:
-                    out.append((ts, rec))
-    out.sort(key=lambda x: x[0])
-    return out
-
-
 def _usage_tokens(usage):
     return sum(int(usage.get(k) or 0) for k in
                ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens", "output_tokens"))
-
-
-def requests_in(path):
-    """Each human prompt of a transcript with its text, tool rounds and the
-    tokens the agent used until the next prompt."""
-    records = _read(path)
-    prompts = []
-    for ts, rec in records:
-        if cc._is_human(rec):
-            text = cc.clean_prompt(cc._text_of((rec.get("message") or {}).get("content"))) or ""
-            prompts.append({"ts": ts, "text": text, "cwd": rec.get("cwd")})
-    for k, p in enumerate(prompts):
-        end = prompts[k + 1]["ts"] if k + 1 < len(prompts) else float("inf")
-        seen, rounds, tokens = set(), 0, 0
-        for ts, rec in records:
-            if not (p["ts"] < ts < end) or rec.get("type") != "assistant":
-                continue
-            msg = rec.get("message") or {}
-            mid = msg.get("id") or rec.get("uuid")
-            content = msg.get("content") if isinstance(msg.get("content"), list) else []
-            if mid not in seen:
-                seen.add(mid)
-                tokens += _usage_tokens(msg.get("usage") or {})
-                if any(isinstance(b, dict) and b.get("type") == "tool_use" for b in content):
-                    rounds += 1
-        p.update(rounds=rounds, work_tokens=tokens, last=k + 1 == len(prompts),
-                 context=prompts[k - 1]["text"] if k else "")
-    return prompts
 
 
 def clip(text, limit):
@@ -125,32 +80,32 @@ def clip(text, limit):
     return text[:head] + " [...] " + text[-(limit - head):]
 
 
-def select(project, n, any_project=False):
+def select(project, n, any_project=False, agent="claude-code"):
     """The newest eligible requests, at most MAX_PER_SESSION per session."""
-    paths = cc.list_sessions(None if any_project else project)
+    ad = ADAPTERS[agent]
+    paths = ad.list_sessions(None if any_project else project)
     picked, seen = [], set()
     now = time.time()
     for path in paths:
-        sid = os.path.splitext(os.path.basename(path))[0]
-        active = now - os.path.getmtime(path) < ACTIVE_S
+        sid = ad.session_name(path)
         candidates = []
-        for p in reversed(requests_in(path)):
+        for p in reversed(ad.requests(path)):
             if len(candidates) >= MAX_PER_SESSION:
                 break
             key = (int(p["ts"]), p["text"][:200])
             if key in seen:          # the same request in a resumed or forked copy of a session
                 continue
             seen.add(key)
-            if p["last"] and active:
+            if p["last"] and now - p["last_event"] < ACTIVE_S:   # may still be running
                 continue
             if p["rounds"] < MIN_ROUNDS or len(p["text"]) < MIN_PROMPT_CHARS or p["text"].startswith("/"):
                 continue
             if not any_project and p["cwd"] and not reckon._in_project({"cwd": p["cwd"]}, project):
                 continue
-            m = cc.measure(path, since=p["ts"])
+            m = ad.measure(path, since=p["ts"])
             if not m or m["agent_min"] < MIN_AGENT_MIN:
                 continue
-            candidates.append(dict(p, session=sid[:8], agent_min=m["agent_min"], wait_min=m["wait_min"],
+            candidates.append(dict(p, session=sid[:getattr(ad, "SHORT_ID", 8)], agent=ad.NAME, agent_min=m["agent_min"], wait_min=m["wait_min"],
                                    measured_rounds=m["rounds"], model=m.get("model")))
         picked.extend(candidates)
         if len(picked) >= n * 3:
@@ -295,7 +250,7 @@ def report(rows, cost, project, hide_text=False):
     work_min = sum(r["agent_min"] for r in rows)
     work_tok = sum(r["work_tokens"] for r in rows)
     lines = [f"# reckon replay: {n} past requests", "",
-             f"Project: {project or 'all projects'}. Made {datetime.now().isoformat(timespec='minutes')}.",
+             f"Agent: {rows[0].get('agent', 'claude-code')}. Project: {project or 'all projects'}. Made {datetime.now().isoformat(timespec='minutes')}.",
              "Minutes are agent minutes (the agent's working time, waits excluded).", "",
              "| # | Request | Actual | Agent's raw answer | reckon, cold start (P50-P90) | reckon, calibrated (P50-P90) |",
              "|---|---|---|---|---|---|"]
@@ -370,6 +325,8 @@ def main(argv=None):
     ap.add_argument("-n", type=_count, default=DEFAULT_N, help=f"how many past requests (3-{MAX_N}, default {DEFAULT_N})")
     ap.add_argument("--project", help="repository or folder whose sessions to use (default: this repo)")
     ap.add_argument("--any-project", action="store_true", help="use sessions of every project")
+    ap.add_argument("--agent", default="claude-code", choices=sorted(ADAPTERS),
+                    help="whose past sessions to replay (default claude-code)")
     ap.add_argument("--model", help="model for the guesses (default: the claude CLI default)")
     ap.add_argument("--claude-bin", default=os.environ.get("CLAUDE_BIN") or "claude")
     ap.add_argument("--list", action="store_true", help="show the selected requests and stop")
@@ -379,10 +336,10 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     project = None if args.any_project else os.path.abspath(args.project or reckon.repo_root() or os.getcwd())
-    reqs = select(project, args.n, args.any_project)
+    reqs = select(project, args.n, args.any_project, args.agent)
     if len(reqs) < 3:
-        sys.exit(f"found {len(reqs)} usable past requests in {project or 'any project'}; need at least 3. "
-                 "Try --any-project, or another --project.")
+        sys.exit(f"found {len(reqs)} usable past requests in {project or 'any project'}; need at least 3. " +
+                 ("Try --any-project, or another --project." if not args.any_project else "Try another --agent."))
     if args.list:
         for r in reqs:
             print(f"{r['id']}  {datetime.fromtimestamp(r['ts']).isoformat(timespec='minutes')}  "
